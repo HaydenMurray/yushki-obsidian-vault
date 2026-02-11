@@ -1,0 +1,1814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spire of Echoes - Decay & Ascension</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            color: #e94560;
+            margin: 0;
+            padding: 20px;
+            overflow-x: auto;
+        }
+
+        .container {
+            max-width: 1500px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 350px 400px 350px 400px;
+            gap: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #f5f5f5;
+            text-shadow: 0 0 10px #e94560;
+            grid-column: 1 / -1;
+            margin-bottom: 20px;
+            font-size: 28px;
+        }
+
+        .section {
+            background: rgba(15, 15, 30, 0.8);
+            border: 2px solid #e94560;
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 0 20px rgba(233, 69, 96, 0.3);
+            height: fit-content;
+        }
+
+        .section h2 {
+            color: #f5f5f5;
+            margin-top: 0;
+            text-align: center;
+            font-size: 18px;
+        }
+
+        /* Combat Grid */
+        .combat-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 80px);
+            grid-template-rows: repeat(3, 80px);
+            gap: 5px;
+            justify-content: center;
+            margin: 20px 0;
+        }
+
+        .combat-grid.expanded {
+            grid-template-columns: repeat(4, 70px);
+            grid-template-rows: repeat(4, 70px);
+        }
+
+        .grid-cell {
+            width: 80px;
+            height: 80px;
+            border: 2px solid #333;
+            background: rgba(20, 20, 40, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: #ccc;
+            position: relative;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .combat-grid.expanded .grid-cell {
+            width: 70px;
+            height: 70px;
+        }
+
+        .grid-cell.occupied {
+            background: rgba(233, 69, 96, 0.3);
+            border-color: #e94560;
+            color: #fff;
+        }
+
+        .grid-cell.drop-zone {
+            border-color: #4CAF50;
+            background: rgba(76, 175, 80, 0.2);
+        }
+
+        .grid-cell.survivor {
+            border-color: #FFD700;
+            box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+        }
+
+        /* Available Units */
+        .units-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .unit {
+            background: rgba(30, 30, 60, 0.8);
+            border: 2px solid #555;
+            padding: 12px;
+            border-radius: 8px;
+            cursor: grab;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .unit:hover {
+            border-color: #e94560;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(233, 69, 96, 0.4);
+        }
+
+        .unit.dragging {
+            opacity: 0.5;
+            cursor: grabbing;
+        }
+
+        .unit.used {
+            opacity: 0.3;
+            border-color: #666;
+            background: rgba(50, 50, 50, 0.5);
+            cursor: not-allowed;
+        }
+
+        .unit.faded {
+            border-color: #444;
+            background: rgba(40, 40, 40, 0.6);
+        }
+
+        .unit.faded .unit-income {
+            color: #666;
+            text-decoration: line-through;
+        }
+
+        .unit.legendary {
+            border-color: #FFD700;
+            background: rgba(255, 215, 0, 0.1);
+        }
+
+        .unit.epic {
+            border-color: #9C27B0;
+            background: rgba(156, 39, 176, 0.1);
+        }
+
+        .unit.rare {
+            border-color: #2196F3;
+            background: rgba(33, 150, 243, 0.1);
+        }
+
+        .unit.uncommon {
+            border-color: #4CAF50;
+            background: rgba(76, 175, 80, 0.1);
+        }
+
+        .unit-symbol {
+            font-size: 24px;
+            text-align: center;
+            margin-bottom: 5px;
+            line-height: 1;
+        }
+
+        .unit-name {
+            font-weight: bold;
+            color: #f5f5f5;
+            margin-bottom: 3px;
+            font-size: 13px;
+        }
+
+        .unit-stats {
+            font-size: 11px;
+            color: #ccc;
+            margin-bottom: 3px;
+        }
+
+        .unit-income {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+
+        .unit-lifespan {
+            font-size: 10px;
+            color: #FFD700;
+            margin-top: 3px;
+        }
+
+        .unit-lifespan.low {
+            color: #ff6b6b;
+            font-weight: bold;
+        }
+
+        .unit-rarity {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .unit-rarity.common { background: #888; }
+        .unit-rarity.uncommon { background: #4CAF50; }
+        .unit-rarity.rare { background: #2196F3; }
+        .unit-rarity.epic { background: #9C27B0; }
+        .unit-rarity.legendary { background: #FFD700; }
+
+        /* Boss Section */
+        .boss {
+            background: rgba(60, 20, 20, 0.8);
+            border: 2px solid #d32f2f;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .boss-name {
+            font-size: 16px;
+            color: #f5f5f5;
+            margin-bottom: 8px;
+        }
+
+        .boss-hp {
+            font-size: 20px;
+            color: #d32f2f;
+            font-weight: bold;
+        }
+
+        .boss-description {
+            font-size: 11px;
+            color: #ccc;
+            margin-top: 8px;
+        }
+
+        /* Combat Stats */
+        .combat-stats {
+            background: rgba(20, 40, 20, 0.8);
+            border: 2px solid #4CAF50;
+            padding: 12px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+
+        .combat-stats h3 {
+            color: #4CAF50;
+            margin: 0 0 8px 0;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .stat-line {
+            display: flex;
+            justify-content: space-between;
+            margin: 3px 0;
+            font-size: 12px;
+        }
+
+        .stat-value {
+            font-weight: bold;
+            color: #4CAF50;
+        }
+
+        /* Shop Sections */
+        .shop {
+            background: rgba(30, 30, 60, 0.8);
+            border: 2px solid #9C27B0;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+        }
+
+        .shop h3 {
+            color: #9C27B0;
+            margin: 0 0 10px 0;
+            text-align: center;
+        }
+
+        .upgrade-shop {
+            background: rgba(60, 40, 20, 0.8);
+            border: 2px solid #FF8C00;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+        }
+
+        .upgrade-shop h3 {
+            color: #FF8C00;
+            margin: 0 0 10px 0;
+            text-align: center;
+        }
+
+        .lootbox, .upgrade-item {
+            background: rgba(60, 30, 80, 0.8);
+            border: 2px solid #9C27B0;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+        .upgrade-item {
+            background: rgba(80, 60, 40, 0.8);
+            border-color: #FF8C00;
+        }
+
+        .lootbox:hover, .upgrade-item:hover {
+            background: rgba(80, 40, 100, 0.8);
+            transform: translateY(-1px);
+        }
+
+        .upgrade-item:hover {
+            background: rgba(100, 80, 60, 0.8);
+        }
+
+        .lootbox.disabled, .upgrade-item.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .upgrade-item.purchased {
+            background: rgba(40, 60, 40, 0.8);
+            border-color: #4CAF50;
+            cursor: default;
+        }
+
+        .lootbox-name, .upgrade-name {
+            font-weight: bold;
+            margin-bottom: 3px;
+        }
+
+        .lootbox-cost, .upgrade-cost {
+            color: #4CAF50;
+            font-size: 12px;
+        }
+
+        .lootbox-contents, .upgrade-description {
+            font-size: 10px;
+            color: #ccc;
+            margin-top: 3px;
+        }
+
+        /* Resonance Meter */
+        .resonance-meter {
+            background: rgba(20, 20, 60, 0.8);
+            border: 2px solid #FFD700;
+            padding: 10px;
+            border-radius: 8px;
+            margin: 15px 0;
+            text-align: center;
+        }
+
+        .resonance-bar {
+            width: 100%;
+            height: 20px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 5px 0;
+        }
+
+        .resonance-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #FFD700, #FF8C00);
+            transition: width 0.5s ease;
+        }
+
+        /* Buttons */
+        .button {
+            background: #e94560;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 3px;
+            transition: background 0.3s ease;
+            width: 100%;
+        }
+
+        .button:hover {
+            background: #d63031;
+        }
+
+        .button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+
+        .button.secondary {
+            background: #333;
+            border: 1px solid #666;
+        }
+
+        .button.secondary:hover {
+            background: #444;
+        }
+
+        .button.shop {
+            background: #9C27B0;
+            font-size: 12px;
+            padding: 6px 12px;
+        }
+
+        .button.shop:hover {
+            background: #7B1FA2;
+        }
+
+        .button.upgrade {
+            background: #FF8C00;
+            font-size: 12px;
+            padding: 6px 12px;
+        }
+
+        .button.upgrade:hover {
+            background: #FF7F00;
+        }
+
+        /* Game State */
+        .game-state {
+            text-align: center;
+            margin: 15px 0;
+        }
+
+        .resource-display {
+            font-size: 16px;
+            margin: 5px 0;
+        }
+
+        .income-display {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+
+        .souls-display {
+            color: #FFD700;
+            font-weight: bold;
+        }
+
+        .boss-progress {
+            color: #ccc;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+
+        /* Tooltips */
+        .tooltip {
+            position: relative;
+            cursor: help;
+        }
+
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 300px;
+            background-color: rgba(0, 0, 0, 0.9);
+            color: #fff;
+            text-align: left;
+            border-radius: 6px;
+            padding: 10px;
+            position: absolute;
+            z-index: 1000;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -150px;
+            font-size: 12px;
+            line-height: 1.4;
+            border: 1px solid #666;
+        }
+
+        .tooltip .tooltiptext::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #666 transparent transparent transparent;
+        }
+
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+        }
+
+        /* Victory/Defeat Messages */
+        .message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 1000;
+            min-width: 300px;
+            max-width: 500px;
+        }
+
+        .message.victory {
+            border: 3px solid #4CAF50;
+        }
+
+        .message.defeat {
+            border: 3px solid #d32f2f;
+        }
+
+        .message.lootbox-result {
+            border: 3px solid #9C27B0;
+        }
+
+        .message.upgrade-result {
+            border: 3px solid #FF8C00;
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 999;
+        }
+
+        /* Animations */
+        @keyframes fadeOut {
+            0% { opacity: 1; }
+            100% { opacity: 0.3; }
+        }
+
+        .fading {
+            animation: fadeOut 3s ease-in-out;
+        }
+
+        /* Warning Messages */
+        .warning {
+            background: rgba(80, 40, 20, 0.8);
+            border: 2px solid #ff6b6b;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            text-align: center;
+            color: #ff6b6b;
+            font-size: 12px;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 1300px) {
+            .container {
+                grid-template-columns: 320px 350px 320px;
+                gap: 15px;
+            }
+            .upgrade-section { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚡ SPIRE OF ECHOES - DECAY & ASCENSION ⚡</h1>
+        
+        <div class="section">
+            <h2>Echo Collective</h2>
+            <div class="resource-display income-display">Active Income: <span id="income-value">0</span>/sec</div>
+            <div class="resource-display souls-display">Soul Energy: <span id="souls-value">150</span></div>
+            
+            <div class="resonance-meter">
+                <div style="font-size: 12px; color: #FFD700; margin-bottom: 5px;">
+                    Resonance: <span id="resonance-value">0</span>/100
+                </div>
+                <div class="resonance-bar">
+                    <div class="resonance-fill" id="resonance-fill" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div id="fading-warning" class="warning" style="display: none;">
+                ⚠️ Some echoes are fading! Kill a boss to refresh all lifespans!
+            </div>
+            
+            <div class="units-list" id="units-list"></div>
+        </div>
+
+        <div class="section">
+            <h2>Resonance Grid</h2>
+            <div class="combat-grid" id="combat-grid"></div>
+            
+            <div class="combat-stats" id="combat-stats" style="display: none;">
+                <h3>Combat Power</h3>
+                <div class="stat-line">
+                    <span>Base Power:</span>
+                    <span class="stat-value" id="base-power">0</span>
+                </div>
+                <div class="stat-line">
+                    <span>Adjacency Bonus:</span>
+                    <span class="stat-value" id="adjacency-bonus">0</span>
+                </div>
+                <div class="stat-line">
+                    <span>Resonance Bonus:</span>
+                    <span class="stat-value" id="resonance-combat-bonus">0</span>
+                </div>
+                <div class="stat-line">
+                    <span><strong>Total Power:</strong></span>
+                    <span class="stat-value" id="total-power">0</span>
+                </div>
+            </div>
+
+            <button class="button" id="attack-button" onclick="attack()" disabled>Launch Resonance Strike</button>
+            <button class="button secondary" onclick="clearGrid()">Clear Grid</button>
+        </div>
+
+        <div class="section">
+            <h2>Current Hollow</h2>
+            <div id="boss-display"></div>
+            
+            <div class="boss-progress">
+                Floor <span id="boss-number">1</span> - Depth: <span id="boss-depth">Shallow</span>
+            </div>
+            
+            <div class="shop">
+                <h3>Echo Lootboxes</h3>
+                
+                <div class="lootbox" onclick="buyLootbox('common')" id="common-lootbox">
+                    <div class="lootbox-name">Whisper Cache</div>
+                    <div class="lootbox-cost">Cost: 80 Souls</div>
+                    <div class="lootbox-contents">2-3 Common Echoes (90s lifespan)</div>
+                </div>
+                
+                <div class="lootbox" onclick="buyLootbox('rare')" id="rare-lootbox">
+                    <div class="lootbox-name">Memory Vault</div>
+                    <div class="lootbox-cost">Cost: 300 Souls</div>
+                    <div class="lootbox-contents">1 Rare + 1-2 Uncommon (120s lifespan)</div>
+                </div>
+                
+                <div class="lootbox" onclick="buyLootbox('epic')" id="epic-lootbox">
+                    <div class="lootbox-name">Echo Sanctum</div>
+                    <div class="lootbox-cost">Cost: 800 Souls</div>
+                    <div class="lootbox-contents">1 Epic + 2 Rare (150s lifespan)</div>
+                </div>
+                
+                <div class="lootbox" onclick="buyLootbox('legendary')" id="legendary-lootbox">
+                    <div class="lootbox-name">Prime Resonance</div>
+                    <div class="lootbox-cost">Cost: 2500 Souls</div>
+                    <div class="lootbox-contents">1 Legendary Echo (200s lifespan)</div>
+                </div>
+            </div>
+            
+            <div class="game-state">
+                <button class="button secondary" onclick="resetGame()">Reset Spire</button>
+            </div>
+        </div>
+
+        <div class="section upgrade-section">
+            <h2>Ascension Chamber</h2>
+            
+            <div class="upgrade-shop">
+                <h3>Permanent Upgrades</h3>
+                
+                <div class="upgrade-item" onclick="buyUpgrade('income')" id="income-upgrade">
+                    <div class="upgrade-name">Echo Amplifier</div>
+                    <div class="upgrade-cost">Cost: 500 Souls</div>
+                    <div class="upgrade-description">+50% income from all echoes</div>
+                </div>
+                
+                <div class="upgrade-item" onclick="buyUpgrade('lifespan')" id="lifespan-upgrade">
+                    <div class="upgrade-name">Temporal Anchor</div>
+                    <div class="upgrade-cost">Cost: 800 Souls</div>
+                    <div class="upgrade-description">+30s lifespan for all new echoes</div>
+                </div>
+                
+                <div class="upgrade-item" onclick="buyUpgrade('grid')" id="grid-upgrade">
+                    <div class="upgrade-name">Reality Expansion</div>
+                    <div class="upgrade-cost">Cost: 1200 Souls</div>
+                    <div class="upgrade-description">Expand combat grid to 4x4</div>
+                </div>
+                
+                <div class="upgrade-item" onclick="buyUpgrade('resonance')" id="resonance-upgrade">
+                    <div class="upgrade-name">Resonance Focus</div>
+                    <div class="upgrade-cost">Cost: 1000 Souls</div>
+                    <div class="upgrade-description">+10 resonance per boss kill</div>
+                </div>
+                
+                <div class="upgrade-item" onclick="buyUpgrade('survival')" id="survival-upgrade">
+                    <div class="upgrade-name">Echo Preservation</div>
+                    <div class="upgrade-cost">Cost: 1500 Souls</div>
+                    <div class="upgrade-description">All units +15% survival chance</div>
+                </div>
+                
+                <div class="upgrade-item" onclick="buyUpgrade('starter')" id="starter-upgrade">
+                    <div class="upgrade-name">Genesis Protocol</div>
+                    <div class="upgrade-cost">Cost: 2000 Souls</div>
+                    <div class="upgrade-description">Start each reset with 3 rare echoes</div>
+                </div>
+            </div>
+            
+            <button class="button secondary" onclick="toggleAutoSave()">
+                <span id="autosave-text">Auto-Save: ON</span>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Game State
+        let units = [];
+        let combatGrid = Array(9).fill(null);
+        let currentBoss = 0;
+        let bossesDefeated = 0;
+        let soulEnergy = 150;
+        let resonance = 0;
+        let incomeTimer = null;
+        let lifespanTimer = null;
+        let autoSave = true;
+        let gridSize = 3;
+
+        // Upgrade state
+        let upgrades = {
+            income: false,      // +50% income
+            lifespan: false,    // +30s lifespan
+            grid: false,        // 4x4 grid
+            resonance: false,   // +10 resonance per kill
+            survival: false,    // +15% survival chance
+            starter: false      // Start with 3 rare echoes
+        };
+
+        // Unit symbols and lifespans by rarity
+        const unitSymbols = {
+            "Lighthouse Keeper": "🏮", "Memory Shard": "🔮", "Fading Light": "💡", "Echo Chamber": "📻",
+            "Deep Echo": "🌊", "Void Walker": "👻", "Resonant Bell": "🔔", "Soul Fragment": "💎",
+            "Prismatic Echo": "🌈", "Time Remnant": "⏳", "Harmony Weaver": "🎵", "Resonance Amp": "📡",
+            "Echo Sovereign": "👑", "Void Heart": "🖤", "Mirror Echo": "🪞",
+            "Prime Resonator": "⭐", "Eternal Guardian": "🛡️", "Reality Anchor": "⚓"
+        };
+
+        const baseLifespans = {
+            common: 90,
+            uncommon: 120,
+            rare: 150,
+            epic: 180,
+            legendary: 200
+        };
+
+        // Enhanced Unit Templates with updated costs and mechanics
+        const unitTemplates = {
+            common: [
+                {
+                    name: "Lighthouse Keeper",
+                    basePower: 8,
+                    income: 12,
+                    adjacency: "Adjacent empty cells +3 each",
+                    description: "Gains power from solitude",
+                    tooltip: "Place away from other units for maximum effect. Each empty adjacent cell gives +3 power."
+                },
+                {
+                    name: "Memory Shard",
+                    basePower: 3,
+                    income: 15,
+                    adjacency: "Corner placement +10",
+                    description: "Fragments of forgotten times",
+                    tooltip: "Place in corners (positions 1, 3, 7, 9) for +10 power bonus."
+                },
+                {
+                    name: "Fading Light",
+                    basePower: 6,
+                    income: 10,
+                    adjacency: "First placed +8",
+                    description: "Diminishes but never dies",
+                    tooltip: "The first unit placed on the grid gets +8 power."
+                },
+                {
+                    name: "Echo Chamber",
+                    basePower: 4,
+                    income: 18,
+                    adjacency: "Surrounded +12",
+                    description: "Amplifies nearby resonance",
+                    tooltip: "Gets +12 power when completely surrounded by other units."
+                }
+            ],
+            uncommon: [
+                {
+                    name: "Deep Echo",
+                    basePower: 7,
+                    income: 20,
+                    adjacency: "Adjacent Echoes +4 each",
+                    description: "Stronger when memories connect",
+                    tooltip: "Each adjacent unit provides +4 power."
+                },
+                {
+                    name: "Void Walker",
+                    basePower: 12,
+                    income: 8,
+                    adjacency: "Edge cells +8",
+                    description: "Thrives at the boundary",
+                    tooltip: "Units on the edge of the grid get +8 power."
+                },
+                {
+                    name: "Resonant Bell",
+                    basePower: 8,
+                    income: 16,
+                    adjacency: "Cross pattern +5 each",
+                    description: "Rings across dimensions",
+                    tooltip: "Each unit in adjacent cells gives +5 power."
+                },
+                {
+                    name: "Soul Fragment",
+                    basePower: 5,
+                    income: 25,
+                    adjacency: "+5 Souls when sacrificed",
+                    description: "Death feeds the cycle",
+                    tooltip: "When sacrificed in combat, gain +5 Soul Energy."
+                }
+            ],
+            rare: [
+                {
+                    name: "Prismatic Echo",
+                    basePower: 6,
+                    income: 22,
+                    adjacency: "Diagonal refraction +8",
+                    description: "Bends light through the void",
+                    tooltip: "Each empty diagonal cell provides +8 power."
+                },
+                {
+                    name: "Time Remnant",
+                    basePower: 10,
+                    income: 18,
+                    adjacency: "35% survival chance",
+                    description: "Echoes of what was",
+                    tooltip: "Has a 35% chance to survive combat."
+                },
+                {
+                    name: "Harmony Weaver",
+                    basePower: 9,
+                    income: 14,
+                    adjacency: "Different types +6 each",
+                    description: "Unity in diversity",
+                    tooltip: "Each adjacent unit with a different name provides +6 power."
+                },
+                {
+                    name: "Resonance Amp",
+                    basePower: 4,
+                    income: 30,
+                    adjacency: "+20 Resonance on sacrifice",
+                    description: "Powers the greater symphony",
+                    tooltip: "When sacrificed, adds +20 to the resonance meter."
+                }
+            ],
+            epic: [
+                {
+                    name: "Echo Sovereign",
+                    basePower: 15,
+                    income: 35,
+                    adjacency: "All units +3",
+                    description: "Commands the memory realm",
+                    tooltip: "Every unit on the grid gets +3 power."
+                },
+                {
+                    name: "Void Heart",
+                    basePower: 20,
+                    income: 12,
+                    adjacency: "Empty cells -5, filled +10",
+                    description: "Feeds on presence and absence",
+                    tooltip: "Each adjacent empty cell gives -5 power, each filled cell gives +10."
+                },
+                {
+                    name: "Mirror Echo",
+                    basePower: 8,
+                    income: 28,
+                    adjacency: "Copies adjacent power",
+                    description: "Reflects what surrounds it",
+                    tooltip: "Gains power equal to the strongest adjacent unit's total power."
+                }
+            ],
+            legendary: [
+                {
+                    name: "Prime Resonator",
+                    basePower: 25,
+                    income: 50,
+                    adjacency: "Grid completion +50",
+                    description: "The first echo, the last memory",
+                    tooltip: "If all grid cells are filled, gains +50 power."
+                },
+                {
+                    name: "Eternal Guardian",
+                    basePower: 18,
+                    income: 40,
+                    adjacency: "Always survives",
+                    description: "Death cannot claim what never lived",
+                    tooltip: "Always survives combat - never gets sacrificed."
+                },
+                {
+                    name: "Reality Anchor",
+                    basePower: 12,
+                    income: 45,
+                    adjacency: "Doubles all bonuses on grid",
+                    description: "Stabilizes the echoing chaos",
+                    tooltip: "All adjacency bonuses on the grid are doubled while present."
+                }
+            ]
+        };
+
+        // Initialize game
+        function initGame() {
+            createGrid();
+            generateStarterUnits();
+            loadNextBoss();
+            startIncomeTimer();
+            startLifespanTimer();
+            loadGame();
+            updateShop();
+        }
+
+        function createGrid() {
+            const grid = document.getElementById('combat-grid');
+            grid.innerHTML = '';
+            
+            const totalCells = gridSize * gridSize;
+            combatGrid = Array(totalCells).fill(null);
+            
+            if (gridSize === 4) {
+                grid.classList.add('expanded');
+            } else {
+                grid.classList.remove('expanded');
+            }
+            
+            for (let i = 0; i < totalCells; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'grid-cell';
+                cell.dataset.index = i;
+                cell.addEventListener('dragover', handleDragOver);
+                cell.addEventListener('drop', handleDrop);
+                cell.addEventListener('dragenter', handleDragEnter);
+                cell.addEventListener('dragleave', handleDragLeave);
+                grid.appendChild(cell);
+            }
+        }
+
+        function generateStarterUnits() {
+            if (upgrades.starter) {
+                // Start with 3 rare echoes
+                for (let i = 0; i < 3; i++) {
+                    const unit = generateUnitFromTier('rare');
+                    units.push(unit);
+                }
+            } else {
+                // Default starter units
+                for (let i = 0; i < 3; i++) {
+                    const unit = generateUnitFromTier('common');
+                    units.push(unit);
+                }
+            }
+            renderUnits();
+            updateIncome();
+        }
+
+        function generateUnitFromTier(tier) {
+            const templates = unitTemplates[tier];
+            const template = templates[Math.floor(Math.random() * templates.length)];
+            
+            let lifespan = baseLifespans[tier];
+            if (upgrades.lifespan) lifespan += 30;
+            
+            return {
+                id: Date.now() + Math.random(),
+                ...JSON.parse(JSON.stringify(template)),
+                rarity: tier,
+                used: false,
+                maxLifespan: lifespan,
+                currentLifespan: lifespan,
+                faded: false
+            };
+        }
+
+        function rollRarity() {
+            const rand = Math.random();
+            if (rand < 0.5) return 'common';
+            if (rand < 0.75) return 'uncommon';
+            if (rand < 0.9) return 'rare';
+            if (rand < 0.98) return 'epic';
+            return 'legendary';
+        }
+
+        function renderUnits() {
+            const container = document.getElementById('units-list');
+            container.innerHTML = '';
+            
+            // Sort units by rarity and lifespan
+            const sortedUnits = [...units].sort((a, b) => {
+                const rarityOrder = ['legendary', 'epic', 'rare', 'uncommon', 'common'];
+                const aIndex = rarityOrder.indexOf(a.rarity);
+                const bIndex = rarityOrder.indexOf(b.rarity);
+                if (aIndex !== bIndex) return aIndex - bIndex;
+                return b.currentLifespan - a.currentLifespan;
+            });
+            
+            sortedUnits.forEach(unit => {
+                const unitDiv = document.createElement('div');
+                const classes = ['unit', unit.rarity];
+                if (unit.used) classes.push('used');
+                if (unit.faded) classes.push('faded');
+                
+                unitDiv.className = classes.join(' ');
+                unitDiv.draggable = !unit.used;
+                unitDiv.dataset.unitId = unit.id;
+                
+                unitDiv.addEventListener('dragstart', handleDragStart);
+                unitDiv.addEventListener('dragend', handleDragEnd);
+                
+                const symbol = unitSymbols[unit.name] || '❓';
+                const lifespanText = unit.currentLifespan > 0 ? `${unit.currentLifespan}s` : 'Faded';
+                const lifespanClass = unit.currentLifespan <= 30 ? 'low' : '';
+                
+                unitDiv.innerHTML = `
+                    <div class="unit-rarity ${unit.rarity}"></div>
+                    <div class="unit-symbol">${symbol}</div>
+                    <div class="unit-name tooltip">
+                        ${unit.name}
+                        <span class="tooltiptext">${unit.tooltip}</span>
+                    </div>
+                    <div class="unit-stats">
+                        Power: ${unit.basePower} | 
+                        <span class="unit-income">Income: ${unit.faded ? 0 : Math.floor(unit.income * (upgrades.income ? 1.5 : 1))}/sec</span>
+                    </div>
+                    <div class="unit-lifespan ${lifespanClass}">
+                        ⏱️ ${lifespanText}
+                    </div>
+                    <div style="font-size: 10px; color: #888; margin-top: 3px;">
+                        ${unit.adjacency}
+                    </div>
+                `;
+                
+                container.appendChild(unitDiv);
+            });
+        }
+
+        function handleDragStart(e) {
+            const unit = units.find(u => u.id == e.target.dataset.unitId);
+            if (unit.used) {
+                e.preventDefault();
+                return;
+            }
+            e.target.classList.add('dragging');
+            e.dataTransfer.setData('text/plain', e.target.dataset.unitId);
+        }
+
+        function handleDragEnd(e) {
+            e.target.classList.remove('dragging');
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+        }
+
+        function handleDragEnter(e) {
+            const index = parseInt(e.target.dataset.index);
+            if (combatGrid[index] === null) {
+                e.target.classList.add('drop-zone');
+            }
+        }
+
+        function handleDragLeave(e) {
+            e.target.classList.remove('drop-zone');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            e.target.classList.remove('drop-zone');
+            
+            const unitId = parseFloat(e.dataTransfer.getData('text/plain'));
+            const index = parseInt(e.target.dataset.index);
+            
+            if (combatGrid[index] === null) {
+                const unit = units.find(u => u.id === unitId);
+                combatGrid[index] = unit;
+                unit.used = true;
+                renderGrid();
+                renderUnits();
+                calculateCombatPower();
+                updateIncome();
+            }
+        }
+
+        function renderGrid() {
+            const cells = document.querySelectorAll('.grid-cell');
+            cells.forEach((cell, index) => {
+                const unit = combatGrid[index];
+                cell.classList.remove('occupied', 'survivor');
+                
+                if (unit) {
+                    cell.classList.add('occupied');
+                    if (unit.survived) cell.classList.add('survivor');
+                    
+                    const symbol = unitSymbols[unit.name] || '❓';
+                    
+                    cell.innerHTML = `
+                        <div style="text-align: center;">
+                            <div style="font-size: 16px; margin-bottom: 2px;">${symbol}</div>
+                            <div style="font-size: 8px; font-weight: bold;">${unit.name}</div>
+                            <div style="font-size: 10px; color: #4CAF50;">${unit.basePower}</div>
+                            ${unit.survived ? '<div style="font-size: 8px; color: #FFD700;">★</div>' : ''}
+                        </div>
+                    `;
+                    cell.onclick = () => removeFromGrid(index);
+                } else {
+                    cell.innerHTML = '';
+                    cell.onclick = null;
+                }
+            });
+        }
+
+        function removeFromGrid(index) {
+            const unit = combatGrid[index];
+            if (unit) {
+                unit.used = false;
+                unit.survived = false;
+                combatGrid[index] = null;
+                renderGrid();
+                renderUnits();
+                calculateCombatPower();
+                updateIncome();
+            }
+        }
+
+        function clearGrid() {
+            combatGrid.forEach((unit, index) => {
+                if (unit) {
+                    unit.used = false;
+                    unit.survived = false;
+                    combatGrid[index] = null;
+                }
+            });
+            renderGrid();
+            renderUnits();
+            calculateCombatPower();
+            updateIncome();
+        }
+
+        function calculateCombatPower() {
+            let basePower = 0;
+            let adjacencyBonus = 0;
+            let resonanceBonus = Math.floor(resonance / 10) * 5;
+
+            const hasUnits = combatGrid.some(unit => unit !== null);
+            if (!hasUnits) {
+                document.getElementById('combat-stats').style.display = 'none';
+                document.getElementById('attack-button').disabled = true;
+                return;
+            }
+
+            document.getElementById('combat-stats').style.display = 'block';
+            
+            // Calculate base power
+            combatGrid.forEach(unit => {
+                if (unit) basePower += unit.basePower;
+            });
+
+            // Check if Reality Anchor is present
+            const hasRealityAnchor = combatGrid.some(unit => unit && unit.name === "Reality Anchor");
+
+            // Calculate adjacency bonuses
+            combatGrid.forEach((unit, index) => {
+                if (!unit) return;
+                let unitBonus = calculateUnitAdjacencyBonus(unit, index);
+                adjacencyBonus += unitBonus;
+            });
+
+            // Apply Reality Anchor doubling
+            if (hasRealityAnchor) {
+                adjacencyBonus *= 2;
+            }
+
+            const totalPower = basePower + adjacencyBonus + resonanceBonus;
+            
+            document.getElementById('base-power').textContent = basePower;
+            document.getElementById('adjacency-bonus').textContent = adjacencyBonus;
+            document.getElementById('resonance-combat-bonus').textContent = resonanceBonus;
+            document.getElementById('total-power').textContent = totalPower;
+            
+            document.getElementById('attack-button').disabled = totalPower === 0;
+        }
+
+        function calculateUnitAdjacencyBonus(unit, index) {
+            let bonus = 0;
+            const row = Math.floor(index / gridSize);
+            const col = index % gridSize;
+            
+            switch(unit.name) {
+                case "Lighthouse Keeper":
+                    getAdjacentCells(index).forEach(adjIndex => {
+                        if (combatGrid[adjIndex] === null) bonus += 3;
+                    });
+                    break;
+                    
+                case "Deep Echo":
+                    getAdjacentCells(index).forEach(adjIndex => {
+                        if (combatGrid[adjIndex] !== null) bonus += 4;
+                    });
+                    break;
+                    
+                case "Prismatic Echo":
+                    getDiagonalCells(index).forEach(diagIndex => {
+                        if (combatGrid[diagIndex] === null) bonus += 8;
+                    });
+                    break;
+                    
+                case "Void Walker":
+                    if (isEdgeCell(index)) bonus += 8;
+                    break;
+                    
+                case "Memory Shard":
+                    if (isCornerCell(index)) bonus += 10;
+                    break;
+                    
+                case "Echo Chamber":
+                    const adjacentCells = getAdjacentCells(index);
+                    if (adjacentCells.every(adjIndex => combatGrid[adjIndex] !== null)) {
+                        bonus += 12;
+                    }
+                    break;
+                    
+                case "Fading Light":
+                    if (combatGrid.findIndex(u => u !== null) === index) {
+                        bonus += 8;
+                    }
+                    break;
+                    
+                case "Resonant Bell":
+                    getAdjacentCells(index).forEach(adjIndex => {
+                        if (combatGrid[adjIndex] !== null) bonus += 5;
+                    });
+                    break;
+                    
+                case "Harmony Weaver":
+                    getAdjacentCells(index).forEach(adjIndex => {
+                        const adjUnit = combatGrid[adjIndex];
+                        if (adjUnit && adjUnit.name !== unit.name) bonus += 6;
+                    });
+                    break;
+                    
+                case "Echo Sovereign":
+                    combatGrid.forEach(u => {
+                        if (u) bonus += 3;
+                    });
+                    break;
+                    
+                case "Void Heart":
+                    getAdjacentCells(index).forEach(adjIndex => {
+                        if (combatGrid[adjIndex] === null) {
+                            bonus -= 5;
+                        } else {
+                            bonus += 10;
+                        }
+                    });
+                    break;
+                    
+                case "Mirror Echo":
+                    let maxPower = 0;
+                    getAdjacentCells(index).forEach(adjIndex => {
+                        const adjUnit = combatGrid[adjIndex];
+                        if (adjUnit) {
+                            const adjBonus = calculateUnitAdjacencyBonus(adjUnit, adjIndex);
+                            maxPower = Math.max(maxPower, adjUnit.basePower + adjBonus);
+                        }
+                    });
+                    bonus += maxPower;
+                    break;
+                    
+                case "Prime Resonator":
+                    if (combatGrid.every(cell => cell !== null)) {
+                        bonus += 50;
+                    }
+                    break;
+            }
+            
+            return bonus;
+        }
+
+        function getAdjacentCells(index) {
+            const row = Math.floor(index / gridSize);
+            const col = index % gridSize;
+            const adjacent = [];
+            
+            if (row > 0) adjacent.push(index - gridSize); // up
+            if (row < gridSize - 1) adjacent.push(index + gridSize); // down
+            if (col > 0) adjacent.push(index - 1); // left
+            if (col < gridSize - 1) adjacent.push(index + 1); // right
+            
+            return adjacent;
+        }
+
+        function getDiagonalCells(index) {
+            const row = Math.floor(index / gridSize);
+            const col = index % gridSize;
+            const diagonal = [];
+            
+            if (row > 0 && col > 0) diagonal.push(index - gridSize - 1); // up-left
+            if (row > 0 && col < gridSize - 1) diagonal.push(index - gridSize + 1); // up-right
+            if (row < gridSize - 1 && col > 0) diagonal.push(index + gridSize - 1); // down-left
+            if (row < gridSize - 1 && col < gridSize - 1) diagonal.push(index + gridSize + 1); // down-right
+            
+            return diagonal;
+        }
+
+        function isEdgeCell(index) {
+            const row = Math.floor(index / gridSize);
+            const col = index % gridSize;
+            return row === 0 || row === gridSize - 1 || col === 0 || col === gridSize - 1;
+        }
+
+        function isCornerCell(index) {
+            const row = Math.floor(index / gridSize);
+            const col = index % gridSize;
+            return (row === 0 || row === gridSize - 1) && (col === 0 || col === gridSize - 1);
+        }
+
+        function updateIncome() {
+            let totalIncome = 0;
+            units.forEach(unit => {
+                if (!unit.used && !unit.faded) {
+                    let income = unit.income;
+                    if (upgrades.income) income *= 1.5;
+                    totalIncome += Math.floor(income);
+                }
+            });
+            document.getElementById('income-value').textContent = totalIncome;
+        }
+
+        function updateResonance() {
+            document.getElementById('resonance-value').textContent = resonance;
+            const fillPercentage = (resonance % 100);
+            document.getElementById('resonance-fill').style.width = fillPercentage + '%';
+        }
+
+        function loadNextBoss() {
+            const boss = generateBoss(currentBoss);
+            document.getElementById('boss-display').innerHTML = `
+                <div class="boss">
+                    <div class="boss-name">${boss.name}</div>
+                    <div class="boss-hp">${boss.hp} HP</div>
+                    <div class="boss-description">${boss.description}</div>
+                </div>
+            `;
+            document.getElementById('boss-number').textContent = currentBoss + 1;
+            document.getElementById('boss-depth').textContent = boss.depth;
+        }
+
+        function generateBoss(floor) {
+            const baseHP = 25;
+            const scalingFactor = Math.pow(1.4, floor);
+            const hp = Math.floor(baseHP * scalingFactor);
+            
+            const bossNames = [
+                "Whisper Hollow", "Creeping Shadow", "Fractured Mind", "The Forgotten",
+                "Eternal Silence", "Void Maw", "Dream Eater", "Soul Reaper",
+                "Memory Thief", "Echo Killer", "Mind Flayer", "Reality Render",
+                "Time Wraith", "Chaos Spawn", "Nightmare Lord", "Void Emperor"
+            ];
+            
+            const descriptions = [
+                "A gentle test of resolve", "Darkness consuming memories", "Chaos incarnate",
+                "What remains when all fades", "The end of echoes", "Hunger without form",
+                "Devours sleeping thoughts", "Harvests departing souls", "Steals what you were",
+                "Silences the resonance", "Penetrates mental barriers", "Tears reality asunder",
+                "Erases temporal existence", "Pure chaotic force", "Rules over fears",
+                "Commands the endless void"
+            ];
+            
+            const nameIndex = Math.min(floor, bossNames.length - 1);
+            const name = bossNames[nameIndex] + (floor > bossNames.length - 1 ? ` ${floor - bossNames.length + 2}` : '');
+            
+            let depth = "Shallow";
+            if (floor >= 5) depth = "Deep";
+            if (floor >= 10) depth = "Abyssal";
+            if (floor >= 20) depth = "Nightmare";
+            if (floor >= 50) depth = "Impossible";
+            
+            return { name, hp, description: descriptions[nameIndex % descriptions.length], depth };
+        }
+
+        function attack() {
+            const totalPower = parseInt(document.getElementById('total-power').textContent);
+            const boss = generateBoss(currentBoss);
+            
+            if (totalPower >= boss.hp) {
+                // Victory!
+                let soulsGained = Math.floor(boss.hp / 3) + 10;
+                bossesDefeated++;
+                currentBoss++;
+                
+                // Process unit sacrifices and special effects
+                let sacrificedUnits = [];
+                let survivedUnits = [];
+                
+                combatGrid.forEach((unit, index) => {
+                    if (unit) {
+                        let survives = false;
+                        let baseChance = 0;
+                        
+                        if (unit.name === "Eternal Guardian") {
+                            survives = true;
+                        } else if (unit.name === "Time Remnant") {
+                            baseChance = 0.35;
+                        }
+                        
+                        if (upgrades.survival) baseChance += 0.15;
+                        
+                        if (!survives && Math.random() < baseChance) {
+                            survives = true;
+                        }
+                        
+                        if (survives) {
+                            unit.survived = true;
+                            unit.used = false;
+                            survivedUnits.push(unit.name);
+                        } else {
+                            // Process sacrifice bonuses
+                            if (unit.name === "Soul Fragment") {
+                                soulsGained += 5;
+                            }
+                            if (unit.name === "Resonance Amp") {
+                                resonance += 20;
+                            }
+                            
+                            sacrificedUnits.push(unit.name);
+                            const unitIndex = units.findIndex(u => u.id === unit.id);
+                            if (unitIndex !== -1) {
+                                units.splice(unitIndex, 1);
+                            }
+                        }
+                        
+                        combatGrid[index] = null;
+                    }
+                });
+                
+                // Refresh all unit lifespans on boss kill!
+                units.forEach(unit => {
+                    unit.currentLifespan = unit.maxLifespan;
+                    unit.faded = false;
+                });
+                
+                soulEnergy += soulsGained;
+                resonance += upgrades.resonance ? 15 : 5;
+                
+                let message = `💀 ${boss.name} Defeated! 💀<br><br>`;
+                message += `Souls Gained: ${soulsGained}<br>`;
+                message += `All echo lifespans refreshed!<br>`;
+                if (sacrificedUnits.length > 0) {
+                    message += `Sacrificed: ${sacrificedUnits.join(', ')}<br>`;
+                }
+                if (survivedUnits.length > 0) {
+                    message += `Survived: ${survivedUnits.join(', ')}<br>`;
+                }
+                
+                showVictory(message);
+                
+                setTimeout(() => {
+                    loadNextBoss();
+                    renderGrid();
+                    renderUnits();
+                    calculateCombatPower();
+                    updateIncome();
+                    updateResonance();
+                    updateShop();
+                    checkFadingWarning();
+                    saveGame();
+                    hideMessage();
+                }, 4000);
+                
+            } else {
+                showDefeat(`💀 DEFEAT 💀<br><br>${boss.name} overwhelms your Echoes!<br>You need ${boss.hp} power, but only have ${totalPower}.<br><br>Your units are still sacrificed in the attempt...`);
+                
+                // Still lose units on defeat
+                combatGrid.forEach((unit, index) => {
+                    if (unit) {
+                        if (unit.name !== "Eternal Guardian") {
+                            const unitIndex = units.findIndex(u => u.id === unit.id);
+                            if (unitIndex !== -1) {
+                                units.splice(unitIndex, 1);
+                            }
+                        } else {
+                            unit.used = false;
+                        }
+                        combatGrid[index] = null;
+                    }
+                });
+                
+                setTimeout(() => {
+                    renderGrid();
+                    renderUnits();
+                    calculateCombatPower();
+                    updateIncome();
+                    saveGame();
+                    hideMessage();
+                }, 3000);
+            }
+        }
+
+        function buyLootbox(tier) {
+            const costs = { common: 80, rare: 300, epic: 800, legendary: 2500 };
+            const cost = costs[tier];
+            
+            if (soulEnergy < cost) return;
+            
+            soulEnergy -= cost;
+            let newUnits = [];
+            
+            switch(tier) {
+                case 'common':
+                    const count = Math.random() < 0.5 ? 2 : 3;
+                    for (let i = 0; i < count; i++) {
+                        newUnits.push(generateUnitFromTier('common'));
+                    }
+                    break;
+                case 'rare':
+                    newUnits.push(generateUnitFromTier('rare'));
+                    const uncommonCount = Math.random() < 0.5 ? 1 : 2;
+                    for (let i = 0; i < uncommonCount; i++) {
+                        newUnits.push(generateUnitFromTier('uncommon'));
+                    }
+                    break;
+                case 'epic':
+                    newUnits.push(generateUnitFromTier('epic'));
+                    for (let i = 0; i < 2; i++) {
+                        newUnits.push(generateUnitFromTier('rare'));
+                    }
+                    break;
+                case 'legendary':
+                    newUnits.push(generateUnitFromTier('legendary'));
+                    break;
+            }
+            
+            units.push(...newUnits);
+            
+            let message = `📦 ${tier.charAt(0).toUpperCase() + tier.slice(1)} Lootbox Opened! 📦<br><br>`;
+            message += `New Echoes:<br>`;
+            newUnits.forEach(unit => {
+                const symbol = unitSymbols[unit.name] || '❓';
+                message += `${symbol} ${unit.name} (${unit.rarity}) - ${unit.currentLifespan}s<br>`;
+            });
+            
+            showMessage(message, 'lootbox-result');
+            
+            setTimeout(() => {
+                renderUnits();
+                updateIncome();
+                updateShop();
+                saveGame();
+                hideMessage();
+            }, 2500);
+        }
+
+        function buyUpgrade(type) {
+            const costs = {
+                income: 500,
+                lifespan: 800,
+                grid: 1200,
+                resonance: 1000,
+                survival: 1500,
+                starter: 2000
+            };
+            
+            if (upgrades[type] || soulEnergy < costs[type]) return;
+            
+            soulEnergy -= costs[type];
+            upgrades[type] = true;
+            
+            const names = {
+                income: "Echo Amplifier",
+                lifespan: "Temporal Anchor",
+                grid: "Reality Expansion",
+                resonance: "Resonance Focus",
+                survival: "Echo Preservation",
+                starter: "Genesis Protocol"
+            };
+            
+            const descriptions = {
+                income: "All echoes now produce 50% more soul energy!",
+                lifespan: "New echoes last 30 seconds longer!",
+                grid: "Combat grid expanded to 4x4 - much more tactical depth!",
+                resonance: "Boss kills now give +10 extra resonance!",
+                survival: "All units have +15% chance to survive combat!",
+                starter: "Future resets will begin with 3 rare echoes!"
+            };
+            
+            if (type === 'grid') {
+                gridSize = 4;
+                createGrid();
+            }
+            
+            let message = `🔮 ${names[type]} Purchased! 🔮<br><br>${descriptions[type]}`;
+            
+            showMessage(message, 'upgrade-result');
+            
+            setTimeout(() => {
+                updateShop();
+                renderUnits();
+                updateIncome();
+                saveGame();
+                hideMessage();
+            }, 2500);
+        }
+
+        function updateShop() {
+            const lootboxCosts = { common: 80, rare: 300, epic: 800, legendary: 2500 };
+            
+            Object.keys(lootboxCosts).forEach(tier => {
+                const lootbox = document.getElementById(`${tier}-lootbox`);
+                if (soulEnergy < lootboxCosts[tier]) {
+                    lootbox.classList.add('disabled');
+                } else {
+                    lootbox.classList.remove('disabled');
+                }
+            });
+
+            const upgradeCosts = {
+                income: 500, lifespan: 800, grid: 1200,
+                resonance: 1000, survival: 1500, starter: 2000
+            };
+            
+            Object.keys(upgradeCosts).forEach(type => {
+                const upgrade = document.getElementById(`${type}-upgrade`);
+                if (upgrades[type]) {
+                    upgrade.classList.add('purchased');
+                    upgrade.innerHTML = upgrade.innerHTML.replace('Cost:', 'PURCHASED');
+                } else if (soulEnergy < upgradeCosts[type]) {
+                    upgrade.classList.add('disabled');
+                } else {
+                    upgrade.classList.remove('disabled');
+                }
+            });
+            
+            document.getElementById('souls-value').textContent = soulEnergy;
+        }
+
+        function checkFadingWarning() {
+            const hasFadingUnits = units.some(unit => !unit.faded && unit.currentLifespan <= 30 && unit.currentLifespan > 0);
+            const warning = document.getElementById('fading-warning');
+            warning.style.display = hasFadingUnits ? 'block' : 'none';
+        }
+
+        function startIncomeTimer() {
+            if (incomeTimer) clearInterval(incomeTimer);
+            incomeTimer = setInterval(() => {
+                let totalIncome = 0;
+                units.forEach(unit => {
+                    if (!unit.used && !unit.faded) {
+                        let income = unit.income;
+                        if (upgrades.income) income *= 1.5;
+                        totalIncome += Math.floor(income);
+                    }
+                });
+                
+                soulEnergy += Math.floor(totalIncome / 10);
+                updateShop();
+                if (autoSave) saveGame();
+            }, 1000);
+        }
+
+        function startLifespanTimer() {
+            if (lifespanTimer) clearInterval(lifespanTimer);
+            lifespanTimer = setInterval(() => {
+                let hasChanges = false;
+                
+                units.forEach(unit => {
+                    if (unit.currentLifespan > 0) {
+                        unit.currentLifespan--;
+                        hasChanges = true;
+                        
+                        if (unit.currentLifespan === 0) {
+                            unit.faded = true;
+                        }
+                    }
+                });
+                
+                if (hasChanges) {
+                    renderUnits();
+                    updateIncome();
+                    checkFadingWarning();
+                }
+            }, 1000);
+        }
+
+        function showVictory(message) {
+            showMessage(message, 'victory');
+        }
+
+        function showDefeat(message) {
+            showMessage(message, 'defeat');
+        }
+
+        function showMessage(message, type) {
+            const overlay = document.createElement('div');
+            overlay.className = 'overlay';
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.innerHTML = `
+                ${message}
+                <br><br>
+                <button class="button" onclick="hideMessage()">Continue</button>
+            `;
+            
+            document.body.appendChild(overlay);
+            document.body.appendChild(messageDiv);
+        }
+
+        function hideMessage() {
+            const overlay = document.querySelector('.overlay');
+            const message = document.querySelector('.message');
+            if (overlay) overlay.remove();
+            if (message) message.remove();
+        }
+
+        function resetGame() {
+            if (confirm("Reset your progress? This will keep permanent upgrades but reset floors, units, and souls.")) {
+                currentBoss = 0;
+                bossesDefeated = 0;
+                soulEnergy = 150;
+                resonance = 0;
+                combatGrid = Array(gridSize * gridSize).fill(null);
+                units = [];
+                generateStarterUnits();
+                loadNextBoss();
+                createGrid();
+                renderGrid();
+                renderUnits();
+                calculateCombatPower();
+                updateIncome();
+                updateResonance();
+                updateShop();
+                checkFadingWarning();
+                saveGame();
+                hideMessage();
+            }
+        }
+
+        function saveGame() {
+            if (!autoSave) return;
+            
+            const gameState = {
+                units,
+                currentBoss,
+                bossesDefeated,
+                soulEnergy,
+                resonance,
+                upgrades,
+                gridSize,
+                combatGrid: combatGrid.map(unit => unit ? unit.id : null)
+            };
+            
+            localStorage.setItem('spireOfEchoes', JSON.stringify(gameState));
+        }
+
+        function loadGame() {
+            const saved = localStorage.getItem('spireOfEchoes');
+            if (!saved) return;
+            
+            try {
+                const gameState = JSON.parse(saved);
+                
+                units = gameState.units || [];
+                currentBoss = gameState.currentBoss || 0;
+                bossesDefeated = gameState.bossesDefeated || 0;
+                soulEnergy = gameState.soulEnergy || 150;
+                resonance = gameState.resonance || 0;
+                upgrades = { ...upgrades, ...(gameState.upgrades || {}) };
+                gridSize = gameState.gridSize || 3;
+                
+                if (gameState.combatGrid) {
+                    combatGrid = gameState.combatGrid.map(unitId => {
+                        if (unitId === null) return null;
+                        return units.find(u => u.id === unitId) || null;
+                    });
+                }
+                
+                createGrid();
+                loadNextBoss();
+                renderGrid();
+                renderUnits();
+                calculateCombatPower();
+                updateIncome();
+                updateResonance();
+                updateShop();
+                checkFadingWarning();
+                
+            } catch (e) {
+                console.error('Failed to load save game:', e);
+            }
+        }
+
+        function toggleAutoSave() {
+            autoSave = !autoSave;
+            document.getElementById('autosave-text').textContent = `Auto-Save: ${autoSave ? 'ON' : 'OFF'}`;
+            if (autoSave) saveGame();
+        }
+
+        // Initialize the game when page loads
+        window.addEventListener('load', initGame);
+    </script>
+</body>
+</html>
