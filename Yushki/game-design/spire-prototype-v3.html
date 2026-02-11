@@ -475,8 +475,7 @@
             position: absolute;
             z-index: 1000;
             bottom: 125%;
-            left: 50%;
-            margin-left: -150px;
+            left: 0;
             font-size: 12px;
             line-height: 1.4;
             border: 1px solid #666;
@@ -486,11 +485,23 @@
             content: "";
             position: absolute;
             top: 100%;
-            left: 50%;
-            margin-left: -5px;
+            left: 20px;
             border-width: 5px;
             border-style: solid;
             border-color: #666 transparent transparent transparent;
+        }
+
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+        }
+
+        /* Right side tooltips */
+        .tooltip.tooltip-right .tooltiptext {
+            left: -280px;
+        }
+
+        .tooltip.tooltip-right .tooltiptext::after {
+            left: 280px;
         }
 
         .tooltip:hover .tooltiptext {
@@ -1026,7 +1037,7 @@
                 unitDiv.innerHTML = `
                     <div class="unit-rarity ${unit.rarity}"></div>
                     <div class="unit-symbol">${symbol}</div>
-                    <div class="unit-name tooltip">
+                    <div class="unit-name tooltip" data-tooltip="${unit.name}">
                         ${unit.name}
                         <span class="tooltiptext">${unit.tooltip}</span>
                     </div>
@@ -1043,6 +1054,27 @@
                 `;
                 
                 container.appendChild(unitDiv);
+            });
+            
+            // Fix tooltip positioning after render
+            setTimeout(fixTooltipPositioning, 10);
+        }
+
+        function fixTooltipPositioning() {
+            const tooltips = document.querySelectorAll('.tooltip');
+            tooltips.forEach(tooltip => {
+                const rect = tooltip.getBoundingClientRect();
+                const viewportWidth = window.innerWidth;
+                
+                // If tooltip would be cut off on the left, move it right
+                if (rect.left < 150) {
+                    tooltip.classList.remove('tooltip-right');
+                } else if (rect.left > viewportWidth - 450) {
+                    // If tooltip would be cut off on the right, move it left
+                    tooltip.classList.add('tooltip-right');
+                } else {
+                    tooltip.classList.remove('tooltip-right');
+                }
             });
         }
 
