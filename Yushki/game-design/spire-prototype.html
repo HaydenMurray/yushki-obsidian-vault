@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spire of Echoes - Prototype</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            color: #e94560;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 400px 1fr;
+            gap: 30px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #f5f5f5;
+            text-shadow: 0 0 10px #e94560;
+            grid-column: 1 / -1;
+            margin-bottom: 30px;
+        }
+
+        .section {
+            background: rgba(15, 15, 30, 0.8);
+            border: 2px solid #e94560;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 0 20px rgba(233, 69, 96, 0.3);
+        }
+
+        .section h2 {
+            color: #f5f5f5;
+            margin-top: 0;
+            text-align: center;
+        }
+
+        /* Combat Grid */
+        .combat-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 80px);
+            grid-template-rows: repeat(3, 80px);
+            gap: 5px;
+            justify-content: center;
+            margin: 20px 0;
+        }
+
+        .grid-cell {
+            width: 80px;
+            height: 80px;
+            border: 2px solid #333;
+            background: rgba(20, 20, 40, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: #ccc;
+            position: relative;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+        }
+
+        .grid-cell.occupied {
+            background: rgba(233, 69, 96, 0.3);
+            border-color: #e94560;
+            color: #fff;
+        }
+
+        .grid-cell.highlighted {
+            background: rgba(233, 69, 96, 0.5);
+            border-color: #ff6b7a;
+        }
+
+        .grid-cell.drop-zone {
+            border-color: #4CAF50;
+            background: rgba(76, 175, 80, 0.2);
+        }
+
+        /* Available Units */
+        .units-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .unit {
+            background: rgba(30, 30, 60, 0.8);
+            border: 2px solid #555;
+            padding: 15px;
+            border-radius: 8px;
+            cursor: grab;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .unit:hover {
+            border-color: #e94560;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(233, 69, 96, 0.4);
+        }
+
+        .unit.dragging {
+            opacity: 0.5;
+            cursor: grabbing;
+        }
+
+        .unit.used {
+            opacity: 0.3;
+            border-color: #666;
+            background: rgba(50, 50, 50, 0.5);
+            cursor: not-allowed;
+        }
+
+        .unit-name {
+            font-weight: bold;
+            color: #f5f5f5;
+            margin-bottom: 5px;
+        }
+
+        .unit-stats {
+            font-size: 12px;
+            color: #ccc;
+        }
+
+        .unit-income {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+
+        /* Boss Section */
+        .boss {
+            background: rgba(60, 20, 20, 0.8);
+            border: 2px solid #d32f2f;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .boss-name {
+            font-size: 18px;
+            color: #f5f5f5;
+            margin-bottom: 10px;
+        }
+
+        .boss-hp {
+            font-size: 24px;
+            color: #d32f2f;
+            font-weight: bold;
+        }
+
+        .boss-description {
+            font-size: 12px;
+            color: #ccc;
+            margin-top: 10px;
+        }
+
+        /* Combat Stats */
+        .combat-stats {
+            background: rgba(20, 40, 20, 0.8);
+            border: 2px solid #4CAF50;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .combat-stats h3 {
+            color: #4CAF50;
+            margin: 0 0 10px 0;
+            text-align: center;
+        }
+
+        .stat-line {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+            font-size: 14px;
+        }
+
+        .stat-value {
+            font-weight: bold;
+            color: #4CAF50;
+        }
+
+        /* Buttons */
+        .button {
+            background: #e94560;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+            transition: background 0.3s ease;
+        }
+
+        .button:hover {
+            background: #d63031;
+        }
+
+        .button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+
+        .button.secondary {
+            background: #333;
+            border: 1px solid #666;
+        }
+
+        .button.secondary:hover {
+            background: #444;
+        }
+
+        /* Game State */
+        .game-state {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .income-display {
+            font-size: 20px;
+            color: #4CAF50;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .boss-progress {
+            color: #ccc;
+            margin-bottom: 20px;
+        }
+
+        /* Adjacency Highlights */
+        .adjacency-bonus {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #4CAF50;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: bold;
+        }
+
+        /* Victory/Defeat Messages */
+        .message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 1000;
+            min-width: 300px;
+        }
+
+        .message.victory {
+            border: 3px solid #4CAF50;
+        }
+
+        .message.defeat {
+            border: 3px solid #d32f2f;
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 999;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚡ SPIRE OF ECHOES ⚡</h1>
+        
+        <div class="section">
+            <h2>Available Echoes</h2>
+            <div class="income-display">Income: <span id="income-value">0</span>/sec</div>
+            <div class="units-list" id="units-list"></div>
+            <button class="button secondary" onclick="generateNewUnits()">Generate New Echoes</button>
+        </div>
+
+        <div class="section">
+            <h2>Combat Grid</h2>
+            <div class="combat-grid" id="combat-grid"></div>
+            
+            <div class="combat-stats" id="combat-stats" style="display: none;">
+                <h3>Combat Power</h3>
+                <div class="stat-line">
+                    <span>Base Power:</span>
+                    <span class="stat-value" id="base-power">0</span>
+                </div>
+                <div class="stat-line">
+                    <span>Adjacency Bonus:</span>
+                    <span class="stat-value" id="adjacency-bonus">0</span>
+                </div>
+                <div class="stat-line">
+                    <span>Resonance Refraction:</span>
+                    <span class="stat-value" id="refraction-bonus">0</span>
+                </div>
+                <div class="stat-line">
+                    <span><strong>Total Power:</strong></span>
+                    <span class="stat-value" id="total-power">0</span>
+                </div>
+            </div>
+
+            <button class="button" id="attack-button" onclick="attack()" disabled>Launch Attack</button>
+            <button class="button secondary" onclick="clearGrid()">Clear Grid</button>
+        </div>
+
+        <div class="section">
+            <h2>Current Hollow</h2>
+            <div id="boss-display"></div>
+            
+            <div class="boss-progress">
+                Boss <span id="boss-number">1</span> of 5
+            </div>
+            
+            <div class="game-state">
+                <button class="button secondary" onclick="resetGame()">Reset Game</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Game State
+        let units = [];
+        let combatGrid = Array(9).fill(null);
+        let currentBoss = 0;
+        let bossesDefeated = 0;
+
+        // Unit Templates
+        const unitTemplates = [
+            {
+                name: "Lighthouse Keeper",
+                basePower: 8,
+                income: 12,
+                adjacency: "Adjacent empty cells +3 each",
+                description: "Gains power from solitude"
+            },
+            {
+                name: "Deep Echo",
+                basePower: 6,
+                income: 18,
+                adjacency: "Adjacent Echoes +4 each",
+                description: "Stronger when memories connect"
+            },
+            {
+                name: "Prismatic Echo",
+                basePower: 4,
+                income: 15,
+                adjacency: "Diagonal refraction +6",
+                description: "Bends light through the void"
+            },
+            {
+                name: "Void Walker",
+                basePower: 12,
+                income: 8,
+                adjacency: "Edge cells +8",
+                description: "Thrives at the boundary"
+            },
+            {
+                name: "Memory Shard",
+                basePower: 3,
+                income: 25,
+                adjacency: "Corner placement +10",
+                description: "Fragments of forgotten times"
+            },
+            {
+                name: "Echo Chamber",
+                basePower: 5,
+                income: 20,
+                adjacency: "Surrounded +15",
+                description: "Amplifies nearby resonance"
+            },
+            {
+                name: "Fading Light",
+                basePower: 10,
+                income: 5,
+                adjacency: "First placed +12",
+                description: "Diminishes but never dies"
+            },
+            {
+                name: "Resonant Bell",
+                basePower: 7,
+                income: 16,
+                adjacency: "Cross pattern +5 each",
+                description: "Rings across dimensions"
+            }
+        ];
+
+        // Boss Templates
+        const bossTemplates = [
+            {
+                name: "Whisper Hollow",
+                hp: 25,
+                description: "A gentle test of your resolve"
+            },
+            {
+                name: "Creeping Shadow",
+                hp: 45,
+                description: "Darkness that consumes memories"
+            },
+            {
+                name: "Fractured Mind",
+                hp: 70,
+                description: "Chaos incarnate, splitting reality"
+            },
+            {
+                name: "The Forgotten",
+                hp: 100,
+                description: "What remains when all else fades"
+            },
+            {
+                name: "Eternal Silence",
+                hp: 140,
+                description: "The final end of all echoes"
+            }
+        ];
+
+        // Initialize game
+        function initGame() {
+            createGrid();
+            generateNewUnits();
+            loadNextBoss();
+            startIncomeTimer();
+        }
+
+        function createGrid() {
+            const grid = document.getElementById('combat-grid');
+            for (let i = 0; i < 9; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'grid-cell';
+                cell.dataset.index = i;
+                cell.addEventListener('dragover', handleDragOver);
+                cell.addEventListener('drop', handleDrop);
+                cell.addEventListener('dragenter', handleDragEnter);
+                cell.addEventListener('dragleave', handleDragLeave);
+                grid.appendChild(cell);
+            }
+        }
+
+        function generateNewUnits() {
+            units = [];
+            for (let i = 0; i < 6; i++) {
+                const template = unitTemplates[Math.floor(Math.random() * unitTemplates.length)];
+                units.push({
+                    id: Date.now() + i,
+                    ...template,
+                    used: false
+                });
+            }
+            renderUnits();
+            updateIncome();
+        }
+
+        function renderUnits() {
+            const container = document.getElementById('units-list');
+            container.innerHTML = '';
+            
+            units.forEach(unit => {
+                const unitDiv = document.createElement('div');
+                unitDiv.className = `unit ${unit.used ? 'used' : ''}`;
+                unitDiv.draggable = !unit.used;
+                unitDiv.dataset.unitId = unit.id;
+                
+                unitDiv.addEventListener('dragstart', handleDragStart);
+                unitDiv.addEventListener('dragend', handleDragEnd);
+                
+                unitDiv.innerHTML = `
+                    <div class="unit-name">${unit.name}</div>
+                    <div class="unit-stats">
+                        Power: ${unit.basePower} | 
+                        <span class="unit-income">Income: ${unit.income}/sec</span>
+                    </div>
+                    <div style="font-size: 11px; color: #888; margin-top: 5px;">
+                        ${unit.adjacency}
+                    </div>
+                `;
+                
+                container.appendChild(unitDiv);
+            });
+        }
+
+        function handleDragStart(e) {
+            const unit = units.find(u => u.id == e.target.dataset.unitId);
+            if (unit.used) {
+                e.preventDefault();
+                return;
+            }
+            e.target.classList.add('dragging');
+            e.dataTransfer.setData('text/plain', e.target.dataset.unitId);
+        }
+
+        function handleDragEnd(e) {
+            e.target.classList.remove('dragging');
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+        }
+
+        function handleDragEnter(e) {
+            const index = parseInt(e.target.dataset.index);
+            if (combatGrid[index] === null) {
+                e.target.classList.add('drop-zone');
+            }
+        }
+
+        function handleDragLeave(e) {
+            e.target.classList.remove('drop-zone');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            e.target.classList.remove('drop-zone');
+            
+            const unitId = parseInt(e.dataTransfer.getData('text/plain'));
+            const index = parseInt(e.target.dataset.index);
+            
+            if (combatGrid[index] === null) {
+                const unit = units.find(u => u.id === unitId);
+                combatGrid[index] = unit;
+                unit.used = true;
+                renderGrid();
+                renderUnits();
+                calculateCombatPower();
+                updateIncome();
+            }
+        }
+
+        function renderGrid() {
+            const cells = document.querySelectorAll('.grid-cell');
+            cells.forEach((cell, index) => {
+                const unit = combatGrid[index];
+                if (unit) {
+                    cell.classList.add('occupied');
+                    cell.innerHTML = `
+                        <div style="text-align: center;">
+                            <div style="font-size: 10px; font-weight: bold;">${unit.name}</div>
+                            <div style="font-size: 12px; color: #4CAF50;">${unit.basePower}</div>
+                        </div>
+                    `;
+                    cell.addEventListener('click', () => removeFromGrid(index));
+                } else {
+                    cell.classList.remove('occupied');
+                    cell.innerHTML = '';
+                    cell.onclick = null;
+                }
+            });
+        }
+
+        function removeFromGrid(index) {
+            const unit = combatGrid[index];
+            if (unit) {
+                unit.used = false;
+                combatGrid[index] = null;
+                renderGrid();
+                renderUnits();
+                calculateCombatPower();
+                updateIncome();
+            }
+        }
+
+        function clearGrid() {
+            combatGrid.forEach((unit, index) => {
+                if (unit) {
+                    unit.used = false;
+                    combatGrid[index] = null;
+                }
+            });
+            renderGrid();
+            renderUnits();
+            calculateCombatPower();
+            updateIncome();
+        }
+
+        function calculateCombatPower() {
+            let basePower = 0;
+            let adjacencyBonus = 0;
+            let refractionBonus = 0;
+
+            const hasUnits = combatGrid.some(unit => unit !== null);
+            if (!hasUnits) {
+                document.getElementById('combat-stats').style.display = 'none';
+                document.getElementById('attack-button').disabled = true;
+                return;
+            }
+
+            document.getElementById('combat-stats').style.display = 'block';
+            
+            // Calculate base power
+            combatGrid.forEach(unit => {
+                if (unit) basePower += unit.basePower;
+            });
+
+            // Calculate adjacency bonuses
+            combatGrid.forEach((unit, index) => {
+                if (!unit) return;
+
+                const row = Math.floor(index / 3);
+                const col = index % 3;
+                
+                // Check adjacency rules
+                if (unit.name === "Lighthouse Keeper") {
+                    // Adjacent empty cells +3 each
+                    const adjacentCells = getAdjacentCells(index);
+                    adjacentCells.forEach(adjIndex => {
+                        if (combatGrid[adjIndex] === null) adjacencyBonus += 3;
+                    });
+                }
+                
+                if (unit.name === "Deep Echo") {
+                    // Adjacent Echoes +4 each
+                    const adjacentCells = getAdjacentCells(index);
+                    adjacentCells.forEach(adjIndex => {
+                        if (combatGrid[adjIndex] !== null) adjacencyBonus += 4;
+                    });
+                }
+                
+                if (unit.name === "Prismatic Echo") {
+                    // Diagonal refraction +6
+                    const diagonalCells = getDiagonalCells(index);
+                    diagonalCells.forEach(diagIndex => {
+                        if (combatGrid[diagIndex] === null) refractionBonus += 6;
+                    });
+                }
+                
+                if (unit.name === "Void Walker") {
+                    // Edge cells +8
+                    if (isEdgeCell(index)) adjacencyBonus += 8;
+                }
+                
+                if (unit.name === "Memory Shard") {
+                    // Corner placement +10
+                    if (isCornerCell(index)) adjacencyBonus += 10;
+                }
+                
+                if (unit.name === "Echo Chamber") {
+                    // Surrounded +15
+                    const adjacentCells = getAdjacentCells(index);
+                    if (adjacentCells.every(adjIndex => combatGrid[adjIndex] !== null)) {
+                        adjacencyBonus += 15;
+                    }
+                }
+                
+                if (unit.name === "Fading Light") {
+                    // First placed +12
+                    if (combatGrid.findIndex(u => u !== null) === index) {
+                        adjacencyBonus += 12;
+                    }
+                }
+                
+                if (unit.name === "Resonant Bell") {
+                    // Cross pattern +5 each
+                    const crossCells = getCrossCells(index);
+                    crossCells.forEach(crossIndex => {
+                        if (combatGrid[crossIndex] !== null) adjacencyBonus += 5;
+                    });
+                }
+            });
+
+            const totalPower = basePower + adjacencyBonus + refractionBonus;
+            
+            document.getElementById('base-power').textContent = basePower;
+            document.getElementById('adjacency-bonus').textContent = adjacencyBonus;
+            document.getElementById('refraction-bonus').textContent = refractionBonus;
+            document.getElementById('total-power').textContent = totalPower;
+            
+            document.getElementById('attack-button').disabled = totalPower === 0;
+        }
+
+        function getAdjacentCells(index) {
+            const row = Math.floor(index / 3);
+            const col = index % 3;
+            const adjacent = [];
+            
+            // Check all 4 directions
+            if (row > 0) adjacent.push(index - 3); // up
+            if (row < 2) adjacent.push(index + 3); // down
+            if (col > 0) adjacent.push(index - 1); // left
+            if (col < 2) adjacent.push(index + 1); // right
+            
+            return adjacent;
+        }
+
+        function getDiagonalCells(index) {
+            const row = Math.floor(index / 3);
+            const col = index % 3;
+            const diagonal = [];
+            
+            // Check all 4 diagonals
+            if (row > 0 && col > 0) diagonal.push(index - 4); // up-left
+            if (row > 0 && col < 2) diagonal.push(index - 2); // up-right
+            if (row < 2 && col > 0) diagonal.push(index + 2); // down-left
+            if (row < 2 && col < 2) diagonal.push(index + 4); // down-right
+            
+            return diagonal;
+        }
+
+        function getCrossCells(index) {
+            const adjacent = getAdjacentCells(index);
+            return adjacent;
+        }
+
+        function isEdgeCell(index) {
+            const row = Math.floor(index / 3);
+            const col = index % 3;
+            return row === 0 || row === 2 || col === 0 || col === 2;
+        }
+
+        function isCornerCell(index) {
+            return index === 0 || index === 2 || index === 6 || index === 8;
+        }
+
+        function updateIncome() {
+            const totalIncome = units.filter(u => !u.used).reduce((sum, unit) => sum + unit.income, 0);
+            document.getElementById('income-value').textContent = totalIncome;
+        }
+
+        function loadNextBoss() {
+            if (currentBoss >= bossTemplates.length) {
+                showVictory("🎉 VICTORY! You've cleared the Spire! 🎉");
+                return;
+            }
+
+            const boss = bossTemplates[currentBoss];
+            document.getElementById('boss-display').innerHTML = `
+                <div class="boss">
+                    <div class="boss-name">${boss.name}</div>
+                    <div class="boss-hp">${boss.hp} HP</div>
+                    <div class="boss-description">${boss.description}</div>
+                </div>
+            `;
+            document.getElementById('boss-number').textContent = currentBoss + 1;
+        }
+
+        function attack() {
+            const totalPower = parseInt(document.getElementById('total-power').textContent);
+            const boss = bossTemplates[currentBoss];
+            
+            if (totalPower >= boss.hp) {
+                // Victory!
+                bossesDefeated++;
+                currentBoss++;
+                
+                // Sacrifice all units on the grid
+                combatGrid.forEach((unit, index) => {
+                    if (unit) {
+                        const unitIndex = units.findIndex(u => u.id === unit.id);
+                        if (unitIndex !== -1) {
+                            units.splice(unitIndex, 1);
+                        }
+                        combatGrid[index] = null;
+                    }
+                });
+                
+                showVictory(`💀 ${boss.name} Defeated! 💀<br><br>Your Echoes fade into memory...<br>Their sacrifice will not be forgotten.`);
+                
+                setTimeout(() => {
+                    loadNextBoss();
+                    renderGrid();
+                    renderUnits();
+                    calculateCombatPower();
+                    updateIncome();
+                    hideMessage();
+                }, 3000);
+                
+            } else {
+                showDefeat(`💀 DEFEAT 💀<br><br>${boss.name} overwhelms your Echoes!<br>You need ${boss.hp} power, but only have ${totalPower}.`);
+            }
+        }
+
+        function showVictory(message) {
+            showMessage(message, 'victory');
+        }
+
+        function showDefeat(message) {
+            showMessage(message, 'defeat');
+        }
+
+        function showMessage(message, type) {
+            const overlay = document.createElement('div');
+            overlay.className = 'overlay';
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.innerHTML = `
+                ${message}
+                <br><br>
+                <button class="button" onclick="hideMessage()">Continue</button>
+            `;
+            
+            document.body.appendChild(overlay);
+            document.body.appendChild(messageDiv);
+        }
+
+        function hideMessage() {
+            const overlay = document.querySelector('.overlay');
+            const message = document.querySelector('.message');
+            if (overlay) overlay.remove();
+            if (message) message.remove();
+        }
+
+        function startIncomeTimer() {
+            // This is just for show in the prototype
+            // In a real game, this would accumulate resources over time
+        }
+
+        function resetGame() {
+            currentBoss = 0;
+            bossesDefeated = 0;
+            combatGrid = Array(9).fill(null);
+            generateNewUnits();
+            loadNextBoss();
+            renderGrid();
+            calculateCombatPower();
+            updateIncome();
+            hideMessage();
+        }
+
+        // Initialize the game when page loads
+        window.addEventListener('load', initGame);
+    </script>
+</body>
+</html>
