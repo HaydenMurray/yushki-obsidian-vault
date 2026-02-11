@@ -466,42 +466,22 @@
 
         .tooltip .tooltiptext {
             visibility: hidden;
-            width: 300px;
+            width: 280px;
             background-color: rgba(0, 0, 0, 0.9);
             color: #fff;
             text-align: left;
             border-radius: 6px;
             padding: 10px;
-            position: absolute;
+            position: fixed;
             z-index: 1000;
-            bottom: 125%;
-            left: 0;
             font-size: 12px;
             line-height: 1.4;
             border: 1px solid #666;
-        }
-
-        .tooltip .tooltiptext::after {
-            content: "";
-            position: absolute;
-            top: 100%;
-            left: 20px;
-            border-width: 5px;
-            border-style: solid;
-            border-color: #666 transparent transparent transparent;
+            pointer-events: none;
         }
 
         .tooltip:hover .tooltiptext {
             visibility: visible;
-        }
-
-        /* Right side tooltips */
-        .tooltip.tooltip-right .tooltiptext {
-            left: -280px;
-        }
-
-        .tooltip.tooltip-right .tooltiptext::after {
-            left: 280px;
         }
 
         .tooltip:hover .tooltiptext {
@@ -573,12 +553,15 @@
         }
 
         /* Responsive adjustments */
-        @media (max-width: 1300px) {
+        @media (max-width: 1200px) {
             .container {
-                grid-template-columns: 320px 350px 320px;
+                grid-template-columns: 320px 350px;
                 gap: 15px;
             }
-            .upgrade-section { display: none; }
+            .upgrade-section { 
+                grid-column: 1 / -1;
+                margin-top: 20px;
+            }
         }
     </style>
 </head>
@@ -1037,7 +1020,7 @@
                 unitDiv.innerHTML = `
                     <div class="unit-rarity ${unit.rarity}"></div>
                     <div class="unit-symbol">${symbol}</div>
-                    <div class="unit-name tooltip" data-tooltip="${unit.name}">
+                    <div class="unit-name tooltip">
                         ${unit.name}
                         <span class="tooltiptext">${unit.tooltip}</span>
                     </div>
@@ -1053,28 +1036,38 @@
                     </div>
                 `;
                 
-                container.appendChild(unitDiv);
-            });
-            
-            // Fix tooltip positioning after render
-            setTimeout(fixTooltipPositioning, 10);
-        }
-
-        function fixTooltipPositioning() {
-            const tooltips = document.querySelectorAll('.tooltip');
-            tooltips.forEach(tooltip => {
-                const rect = tooltip.getBoundingClientRect();
-                const viewportWidth = window.innerWidth;
+                // Add tooltip positioning
+                const tooltip = unitDiv.querySelector('.tooltip');
+                const tooltiptext = unitDiv.querySelector('.tooltiptext');
                 
-                // If tooltip would be cut off on the left, move it right
-                if (rect.left < 150) {
-                    tooltip.classList.remove('tooltip-right');
-                } else if (rect.left > viewportWidth - 450) {
-                    // If tooltip would be cut off on the right, move it left
-                    tooltip.classList.add('tooltip-right');
-                } else {
-                    tooltip.classList.remove('tooltip-right');
-                }
+                tooltip.addEventListener('mouseenter', (e) => {
+                    const rect = e.target.getBoundingClientRect();
+                    const viewportWidth = window.innerWidth;
+                    const viewportHeight = window.innerHeight;
+                    
+                    let left = rect.left + 10;
+                    let top = rect.top - 10;
+                    
+                    // Adjust if tooltip would go off right edge
+                    if (left + 300 > viewportWidth) {
+                        left = rect.right - 300;
+                    }
+                    
+                    // Adjust if tooltip would go off left edge
+                    if (left < 10) {
+                        left = 10;
+                    }
+                    
+                    // Adjust if tooltip would go off top
+                    if (top < 10) {
+                        top = rect.bottom + 10;
+                    }
+                    
+                    tooltiptext.style.left = left + 'px';
+                    tooltiptext.style.top = top + 'px';
+                });
+                
+                container.appendChild(unitDiv);
             });
         }
 
