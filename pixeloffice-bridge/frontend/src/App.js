@@ -1,10 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   PIXEL OFFICE v2 — Open Floor Plan Agent Simulation + OpenClaw Integration
+   PIXEL OFFICE v2 — Full Office + Real OpenClaw Integration 
    ═══════════════════════════════════════════════════════════════════════════ */
-
-// ─── OFFICE LAYOUT (pixel coordinates on a 960x560 canvas) ────────────────────
 
 const OFFICE_W = 960;
 const OFFICE_H = 560;
@@ -19,7 +17,6 @@ const ZONES = [
   { id: "lounge", name: "Lounge", x: 760, y: 310, w: 180, h: 220, floor: "#161413" },
 ];
 
-// Furniture items with pixel positions
 const FURNITURE = [
   // Dev pit desks
   { type: "desk", x: 140, y: 70, w: 56, h: 30, label: "D1" },
@@ -66,7 +63,6 @@ const FURNITURE = [
   { type: "plant", x: 20, y: 330, w: 16, h: 16 },
 ];
 
-// Stations: named positions where agents can sit/work
 const STATIONS = {
   desk1: { x: 160, y: 100, zone: "devpit" },
   desk2: { x: 160, y: 170, zone: "devpit" },
@@ -88,7 +84,6 @@ const STATIONS = {
   entrance: { x: 55, y: 280, zone: "entrance" },
 };
 
-// Waypoints define walkable corridors
 const WAYPOINTS = {
   wp_entrance: { x: 75, y: 280 },
   wp_hall_left: { x: 200, y: 270 },
@@ -109,7 +104,6 @@ const WAYPOINTS = {
   wp_lounge_inner: { x: 820, y: 400 },
 };
 
-// Graph edges for waypoint navigation
 const WP_EDGES = {
   wp_entrance: ["wp_hall_left"],
   wp_hall_left: ["wp_entrance", "wp_hall_center", "wp_dev_entry", "wp_conf_entry"],
@@ -130,7 +124,6 @@ const WP_EDGES = {
   wp_lounge_inner: ["wp_lounge_entry"],
 };
 
-// Map stations to nearest waypoint
 const STATION_WP = {
   desk1: "wp_dev_inner", desk2: "wp_dev_inner", desk3: "wp_dev_inner", desk4: "wp_dev_inner",
   conf1: "wp_conf_inner", conf2: "wp_conf_inner", conf3: "wp_conf_inner", conf4: "wp_conf_inner",
@@ -140,8 +133,6 @@ const STATION_WP = {
   lounge1: "wp_lounge_inner",
   entrance: "wp_entrance",
 };
-
-// ─── PATHFINDING ──────────────────────────────────────────────────────────────
 
 function findWaypointPath(fromWp, toWp) {
   if (fromWp === toWp) return [];
@@ -166,17 +157,13 @@ function buildFullPath(fromStation, toStation) {
   if (!fromWp || !toWp) return [];
   const wpPath = findWaypointPath(fromWp, toWp);
   const points = [];
-  // Waypoints as coordinates
   for (const wp of wpPath) {
     points.push({ x: WAYPOINTS[wp].x, y: WAYPOINTS[wp].y });
   }
-  // Final destination
   const dest = STATIONS[toStation];
   if (dest) points.push({ x: dest.x, y: dest.y });
   return points;
 }
-
-// ─── AGENT CONFIG ─────────────────────────────────────────────────────────────
 
 const AGENT_DEFS = [
   { id: "alice", name: "Alice", role: "Lead Engineer", color: "#ff6b9d", skinColor: "#f0c8a0",
@@ -236,34 +223,22 @@ const REPORTS = [
 
 const pick = a => a[Math.floor(Math.random() * a.length)];
 const uid = () => Math.random().toString(36).slice(2, 8);
-const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
-// ─── OPENCLAW CLIENT ──────────────────────────────────────────────────────────
-
+// OpenClaw Client - connects to bridge server
 class OpenClawClient {
   constructor() {
     this.baseUrl = "";
-    this.apiKey = "";
     this.connected = false;
-    this.agentMap = {}; // office agent id → openclaw agent id
     this.lastError = null;
   }
 
-  configure(baseUrl, apiKey, agentMap = {}) {
+  configure(baseUrl) {
     this.baseUrl = baseUrl.replace(/\/+$/, "");
-    this.apiKey = apiKey;
-    this.agentMap = agentMap;
-  }
-
-  headers() {
-    const h = { "Content-Type": "application/json" };
-    if (this.apiKey) h["Authorization"] = `Bearer ${this.apiKey}`;
-    return h;
   }
 
   async testConnection() {
     try {
-      const res = await fetch(`${this.baseUrl}/api/health`, { headers: this.headers(), signal: AbortSignal.timeout(5000) });
+      const res = await fetch(`${this.baseUrl}/api/health`, { signal: AbortSignal.timeout(5000) });
       this.connected = res.ok;
       this.lastError = res.ok ? null : `HTTP ${res.status}`;
       return this.connected;
@@ -274,42 +249,13 @@ class OpenClawClient {
     }
   }
 
-  async getDecision(agentId, context) {
+  async sendMessage(agentId, message) {
     if (!this.connected || !this.baseUrl) return null;
-    const ocId = this.agentMap[agentId] || agentId;
     try {
-      const res = await fetch(`${this.baseUrl}/api/agents/${ocId}/decide`, {
+      const res = await fetch(`${this.baseUrl}/api/agents/${agentId}/message`, {
         method: "POST",
-        headers: this.headers(),
-        body: JSON.stringify({
-          context: {
-            currentZone: context.zone,
-            nearbyAgents: context.nearby,
-            currentTask: context.task,
-            status: context.status,
-            availableStations: context.stations,
-            recentMemory: context.memory?.slice(-5),
-          }
-        }),
-        signal: AbortSignal.timeout(8000),
-      });
-      if (!res.ok) return null;
-      const data = await res.json();
-      // Expected response: { action: "move"|"chat"|"work"|"idle", params: { ... } }
-      return data;
-    } catch {
-      return null;
-    }
-  }
-
-  async sendMessage(agentId, message, fromUser = true) {
-    if (!this.connected || !this.baseUrl) return null;
-    const ocId = this.agentMap[agentId] || agentId;
-    try {
-      const res = await fetch(`${this.baseUrl}/api/agents/${ocId}/message`, {
-        method: "POST",
-        headers: this.headers(),
-        body: JSON.stringify({ message, fromUser }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
         signal: AbortSignal.timeout(8000),
       });
       if (!res.ok) return null;
@@ -319,11 +265,15 @@ class OpenClawClient {
     }
   }
 
-  async getAgentPlan(agentId) {
+  async getDecision(agentId, context) {
     if (!this.connected || !this.baseUrl) return null;
-    const ocId = this.agentMap[agentId] || agentId;
     try {
-      const res = await fetch(`${this.baseUrl}/api/agents/${ocId}/plan`, { headers: this.headers(), signal: AbortSignal.timeout(5000) });
+      const res = await fetch(`${this.baseUrl}/api/agents/${agentId}/decide`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ context }),
+        signal: AbortSignal.timeout(8000),
+      });
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -333,11 +283,7 @@ class OpenClawClient {
 }
 
 const openClaw = new OpenClawClient();
-
-// Auto-configure to connect to localhost:8000
-openClaw.configure("http://localhost:8000", "");
-
-// ─── LOCAL AI FALLBACK ────────────────────────────────────────────────────────
+openClaw.configure("http://localhost:8000");
 
 function localDecide(agent, allAgents) {
   if (agent.status === "traveling" || agent.status === "offline") return null;
@@ -363,8 +309,6 @@ function localDecide(agent, allAgents) {
   return null;
 }
 
-// ─── MAIN COMPONENT ──────────────────────────────────────────────────────────
-
 export default function App() {
   const SPEED = 2.5;
 
@@ -374,11 +318,11 @@ export default function App() {
       ...def, x: st?.x || 200, y: st?.y || 280,
       station: def.defaultStation,
       zone: st?.zone || "devpit",
-      status: "idle", // idle, working, traveling, offline
+      status: "idle",
       task: null, taskTicks: 0, taskDuration: 0,
       path: [], pathIndex: 0,
       bubble: null, bubbleTime: 0,
-      facing: 1, // 1=right, -1=left
+      facing: 1,
       walkFrame: 0, idleTicks: 0,
       memory: [], xp: 0, level: 1,
       relationships: {},
@@ -388,15 +332,13 @@ export default function App() {
   const [agents, setAgents] = useState(initAgents);
   const [chatLog, setChatLog] = useState([]);
   const [command, setCommand] = useState("");
-  const [showSettings, setShowSettings] = useState(false);
-  const [ocConfig, setOcConfig] = useState({ url: "http://localhost:8000", key: "", connected: false, error: null });
+  const [connected, setConnected] = useState(false);
   const [paused, setPaused] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [zoom, setZoom] = useState(1);
   const [tick, setTick] = useState(0);
   const chatEnd = useRef(null);
   const inputRef = useRef(null);
-  const officeRef = useRef(null);
 
   const addLog = useCallback((entry) => {
     setChatLog(prev => [...prev.slice(-300), { ...entry, id: uid(), time: Date.now() }]);
@@ -408,18 +350,17 @@ export default function App() {
   useEffect(() => {
     const testConnection = async () => {
       const ok = await openClaw.testConnection();
-      setOcConfig(c => ({ ...c, connected: ok, error: ok ? null : openClaw.lastError }));
+      setConnected(ok);
       if (ok) {
-        addLog({ type: "system", agent: "OpenClaw", color: "#51cf66", msg: "Connected to bridge server! 🔗" });
+        addLog({ type: "system", agent: "OpenClaw", color: "#51cf66", msg: "🔗 Connected to bridge server!" });
       } else {
-        addLog({ type: "system", agent: "System", color: "#ff922b", msg: "Running in local mode. Start bridge server for full integration." });
+        addLog({ type: "system", agent: "System", color: "#ff922b", msg: "🔧 Running in local mode. Start bridge server for full integration." });
       }
     };
     testConnection();
   }, [addLog]);
 
-  // ─── GAME LOOP ──────────────────────────────────────────────────────────────
-
+  // Game loop
   useEffect(() => {
     if (paused) return;
     const iv = setInterval(() => {
@@ -433,7 +374,7 @@ export default function App() {
         if (a.bubble && now - a.bubbleTime > 3500) a.bubble = null;
         if (a.status === "offline") return a;
 
-        // ── TRAVELING: move along path ──
+        // TRAVELING: move along path
         if (a.status === "traveling" && a.path.length > 0) {
           const target = a.path[0];
           const dx = target.x - a.x;
@@ -449,7 +390,6 @@ export default function App() {
             if (a.path.length === 0) {
               a.status = "idle";
               a.idleTicks = 0;
-              // Determine zone from station
               const st = Object.entries(STATIONS).find(([, v]) => Math.abs(v.x - a.x) < 20 && Math.abs(v.y - a.y) < 20);
               if (st) { a.station = st[0]; a.zone = STATIONS[st[0]].zone; }
             }
@@ -460,13 +400,13 @@ export default function App() {
           return a;
         }
 
-        // ── WORKING: tick progress ──
+        // WORKING: tick progress
         if (a.status === "working") {
           a.taskTicks++;
-          a.walkFrame = (a.walkFrame + 1) % 40; // slow animation
+          a.walkFrame = (a.walkFrame + 1) % 40;
         }
 
-        // ── IDLE: increment idle counter ──
+        // IDLE: increment idle counter
         if (a.status === "idle") {
           a.idleTicks++;
           if (a.idleTicks > 800) {
@@ -478,16 +418,15 @@ export default function App() {
           }
         }
 
-        // ── AI DECISION (staggered per agent) ──
+        // AI DECISION (staggered per agent)
         const decisionInterval = 8 + (a.id.charCodeAt(0) % 5);
         if ((tick + a.id.charCodeAt(1)) % decisionInterval !== 0) return a;
 
-        // Try OpenClaw first, fallback to local
         const decision = localDecide(a, prev);
         if (!decision) return a;
 
         switch (decision.action) {
-          case "chat": {
+          case "chat":
             const target = prev.find(ag => ag.id === decision.target);
             if (target) {
               a.bubble = decision.message;
@@ -497,8 +436,7 @@ export default function App() {
               addLog({ type: "chat", agent: a.name, color: a.color, target: target.name, zone: a.zone, msg: decision.message });
             }
             break;
-          }
-          case "work": {
+          case "work":
             const dur = 50 + Math.floor(Math.random() * 80);
             a.status = "working";
             a.task = decision.task;
@@ -509,8 +447,7 @@ export default function App() {
             a.bubbleTime = now;
             addLog({ type: "task", agent: a.name, color: a.color, zone: a.zone, msg: `Started ${decision.task.verb} ${decision.task.subject}` });
             break;
-          }
-          case "finish": {
+          case "finish":
             const report = pick(REPORTS);
             a.status = "idle";
             a.xp += 10;
@@ -522,8 +459,7 @@ export default function App() {
             addLog({ type: "done", agent: a.name, color: a.color, zone: a.zone, msg: `Finished ${a.task?.verb} ${a.task?.subject}. ${report}` });
             a.task = null;
             break;
-          }
-          case "move": {
+          case "move":
             const path = buildFullPath(a.station, decision.station);
             if (path.length > 0) {
               a.status = "traveling";
@@ -536,7 +472,6 @@ export default function App() {
               addLog({ type: "move", agent: a.name, color: a.color, zone: a.zone, msg: `Heading to ${zoneName}` });
             }
             break;
-          }
         }
         return a;
       }));
@@ -544,57 +479,7 @@ export default function App() {
     return () => clearInterval(iv);
   }, [paused, tick, addLog]);
 
-  // ── OpenClaw async decisions (runs separately, patches in results) ──
-  useEffect(() => {
-    if (!openClaw.connected || paused) return;
-    const iv = setInterval(async () => {
-      for (const agent of agents) {
-        if (agent.status !== "idle") continue;
-        const ctx = {
-          zone: agent.zone, status: agent.status, task: agent.task,
-          nearby: agents.filter(a => a.id !== agent.id && a.zone === agent.zone && a.status !== "offline").map(a => a.name),
-          stations: agent.stations, memory: agent.memory,
-        };
-        const decision = await openClaw.getDecision(agent.id, ctx);
-        if (decision?.action) {
-          setAgents(prev => prev.map(a => {
-            if (a.id !== agent.id || a.status !== "idle") return a;
-            // Map OpenClaw decisions to local action format
-            switch (decision.action) {
-              case "move": {
-                const dest = decision.params?.station;
-                if (dest && STATIONS[dest]) {
-                  const path = buildFullPath(a.station, dest);
-                  if (path.length > 0) {
-                    return { ...a, status: "traveling", path, idleTicks: 0, bubble: `→ ${ZONES.find(z => z.id === STATIONS[dest]?.zone)?.name}`, bubbleTime: Date.now() };
-                  }
-                }
-                break;
-              }
-              case "chat": {
-                if (decision.params?.message) {
-                  return { ...a, bubble: decision.params.message, bubbleTime: Date.now(), idleTicks: 0 };
-                }
-                break;
-              }
-              case "work": {
-                if (decision.params?.subject) {
-                  const task = { verb: decision.params.verb || "working on", subject: decision.params.subject };
-                  return { ...a, status: "working", task, taskTicks: 0, taskDuration: decision.params.duration || 70, bubble: `${task.verb} ${task.subject}`, bubbleTime: Date.now(), idleTicks: 0 };
-                }
-                break;
-              }
-            }
-            return a;
-          }));
-        }
-      }
-    }, 4000);
-    return () => clearInterval(iv);
-  }, [agents, paused]);
-
-  // ─── COMMAND HANDLER ────────────────────────────────────────────────────────
-
+  // Command handler
   const handleCommand = useCallback(async () => {
     const cmd = command.trim();
     if (!cmd) return;
@@ -607,7 +492,6 @@ export default function App() {
     if (lower.includes("call back") || lower.includes("wake up") || lower.includes("come back")) {
       setAgents(prev => prev.map(a => {
         if (a.status !== "offline") return a;
-        const st = STATIONS[a.defaultStation];
         addLog({ type: "system", agent: a.name, color: a.color, msg: `${a.name} is returning!` });
         return { ...a, status: "idle", x: 55, y: 280, station: "entrance", zone: "entrance", idleTicks: 0, bubble: "I'm back! 👋", bubbleTime: Date.now() };
       }));
@@ -627,7 +511,7 @@ export default function App() {
       const instruction = cmd.slice(targetAgent.name.length).replace(/^[,:\s]+/, "").trim();
 
       // If OpenClaw connected, forward the message
-      if (openClaw.connected) {
+      if (connected) {
         const response = await openClaw.sendMessage(targetAgent.id, instruction || cmd);
         if (response?.reply) {
           setAgents(prev => prev.map(a => a.id === targetAgent.id ? { ...a, bubble: response.reply, bubbleTime: Date.now(), idleTicks: 0 } : a));
@@ -646,36 +530,10 @@ export default function App() {
       return;
     }
 
-    // Team-wide
-    if (lower.includes("team") || lower.includes("everyone") || lower.includes("all")) {
-      if (openClaw.connected) {
-        for (const a of agents.filter(ag => ag.status !== "offline")) {
-          openClaw.sendMessage(a.id, cmd);
-        }
-      }
-      const responses = ["On it!", "Got it!", "Let me look into that.", "Acknowledged!", "I'll handle my part.", "Already on it!"];
-      setAgents(prev => prev.map(a => a.status === "offline" ? a : {
-        ...a, bubble: pick(responses), bubbleTime: Date.now(), idleTicks: 0,
-      }));
-      return;
-    }
-
     addLog({ type: "system", agent: "System", color: "#666", msg: "Address agents by name (e.g., 'Alice, review the code') or say 'team' for everyone." });
-  }, [command, agents, addLog]);
-
-  // ─── OPENCLAW CONFIG ────────────────────────────────────────────────────────
-
-  const testConnection = async () => {
-    openClaw.configure(ocConfig.url, ocConfig.key);
-    const ok = await openClaw.testConnection();
-    setOcConfig(c => ({ ...c, connected: ok, error: ok ? null : openClaw.lastError }));
-    addLog({ type: "system", agent: "OpenClaw", color: ok ? "#51cf66" : "#ff6b6b", msg: ok ? "Connected to OpenClaw framework!" : `Connection failed: ${openClaw.lastError}` });
-  };
-
-  // ─── RENDER ─────────────────────────────────────────────────────────────────
+  }, [command, agents, addLog, connected]);
 
   const statusColor = s => ({ working: "#51cf66", idle: "#ffd43b", traveling: "#74c0fc", offline: "#444" }[s] || "#666");
-
   const font = "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace";
 
   return (
@@ -691,24 +549,18 @@ export default function App() {
         @keyframes blink{0%,90%,100%{opacity:1}95%{opacity:0}}
         @keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
         @keyframes slideUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-        @keyframes glow{0%,100%{box-shadow:0 0 4px var(--c)}50%{box-shadow:0 0 12px var(--c)}}
         @keyframes rackBlink{0%,49%{background:#51cf66}50%,100%{background:#2a6636}}
-        @keyframes typing{0%,100%{width:0}50%{width:12px}}
         @keyframes bob{0%,100%{transform:translateY(0) scaleX(var(--face))}30%{transform:translateY(-1.5px) scaleX(var(--face))}70%{transform:translateY(0.5px) scaleX(var(--face))}}
       `}</style>
 
-      {/* The full PixelOffice interface from here down is exactly as you sent it... */}
-      {/* I'll continue with the rest of the component but it's getting very long */}
-
-      {/* ═══ LEFT PANEL: ROSTER ═══ */}
+      {/* LEFT PANEL: ROSTER */}
       <div style={{ width: 210, borderRight: "1px solid #1a1d24", display: "flex", flexDirection: "column", background: "#0d0e14", flexShrink: 0 }}>
         <div style={{ padding: "14px 12px 10px", borderBottom: "1px solid #1a1d24", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span style={{ fontFamily: "'Silkscreen', cursive", fontSize: 13, color: "#ff6b9d", letterSpacing: 1 }}>
             PIXELOFFICE
           </span>
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-            <div onClick={() => setShowSettings(true)} style={{ cursor: "pointer", fontSize: 14, opacity: 0.5 }} title="Settings">⚙</div>
-            <div style={{ width: 7, height: 7, borderRadius: "50%", background: ocConfig.connected ? "#51cf66" : "#444", border: `1px solid ${ocConfig.connected ? "#51cf66" : "#333"}` }} title={ocConfig.connected ? "OpenClaw connected" : "OpenClaw disconnected"} />
+            <div style={{ width: 7, height: 7, borderRadius: "50%", background: connected ? "#51cf66" : "#444", border: `1px solid ${connected ? "#51cf66" : "#333"}` }} title={connected ? "OpenClaw connected" : "OpenClaw disconnected"} />
           </div>
         </div>
 
@@ -724,7 +576,6 @@ export default function App() {
                   transition: "background .15s",
                 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                  {/* Mini sprite */}
                   <div style={{ position: "relative", width: 28, height: 28, flexShrink: 0 }}>
                     <div style={{
                       width: 14, height: 10, background: agent.shirtColor, borderRadius: "2px 2px 1px 1px",
@@ -767,25 +618,6 @@ export default function App() {
                     }} />
                   </div>
                 )}
-                {sel && (
-                  <div style={{ marginTop: 6, fontSize: 9, color: "#445", lineHeight: 1.7 }}>
-                    <div>Zone: {ZONES.find(z => z.id === agent.zone)?.name}</div>
-                    <div>Status: {agent.status}{agent.task ? ` — ${agent.task.verb}` : ""}</div>
-                    <div>Traits: {agent.traits.join(", ")}</div>
-                    <div>Tasks done: {agent.memory.length} · XP: {agent.xp}/{agent.level * 30}</div>
-                    {agent.status === "offline" && (
-                      <button onClick={e => {
-                        e.stopPropagation();
-                        setAgents(prev => prev.map(a => a.id === agent.id ? { ...a, status: "idle", x: 55, y: 280, station: "entrance", zone: "entrance", idleTicks: 0, bubble: "I'm back! 👋", bubbleTime: Date.now() } : a));
-                        addLog({ type: "system", agent: agent.name, color: agent.color, msg: `${agent.name} called back!` });
-                      }} style={{
-                        marginTop: 4, padding: "2px 8px", fontSize: 9, cursor: "pointer",
-                        background: `${agent.color}18`, border: `1px solid ${agent.color}33`,
-                        color: agent.color, borderRadius: 3, fontFamily: font,
-                      }}>Call Back</button>
-                    )}
-                  </div>
-                )}
               </div>
             );
           })}
@@ -801,9 +633,278 @@ export default function App() {
         </div>
       </div>
 
-      {/* ═══ CENTER: OFFICE VIEW ═══ */}
+      {/* CENTER: OFFICE VIEW */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-        {/* Command bar - simplified for now */}
+        <div style={{
+          height: 38, borderBottom: "1px solid #1a1d24", display: "flex", alignItems: "center",
+          padding: "0 16px", justifyContent: "space-between", background: "#0d0e14", flexShrink: 0,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 10, color: "#445" }}>
+            <span style={{ color: paused ? "#ff6b9d" : "#51cf66", fontWeight: 600 }}>{paused ? "⏸ PAUSED" : "● LIVE"}</span>
+            <span>Tick {tick}</span>
+            {connected && <span style={{ color: "#51cf66" }}>🔗 OpenClaw</span>}
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            {[0.7, 0.85, 1].map(z => (
+              <button key={z} onClick={() => setZoom(z)} style={{
+                background: zoom === z ? "#1a1d24" : "transparent", border: "1px solid #1a1d24",
+                color: zoom === z ? "#aab" : "#334", padding: "2px 6px", borderRadius: 3,
+                cursor: "pointer", fontFamily: font, fontSize: 9,
+              }}>{Math.round(z * 100)}%</button>
+            ))}
+          </div>
+        </div>
+
+        {/* FULL OFFICE CANVAS */}
+        <div style={{
+          flex: 1, overflow: "auto", display: "flex", alignItems: "center", justifyContent: "center",
+          background: "radial-gradient(ellipse at 50% 50%, #0f1018 0%, #0a0b0f 100%)",
+          position: "relative",
+        }}>
+          <div style={{
+            width: OFFICE_W, height: OFFICE_H, position: "relative",
+            transform: `scale(${zoom})`, transformOrigin: "center center",
+            flexShrink: 0,
+          }}>
+            {/* Floor grid pattern */}
+            <div style={{
+              position: "absolute", inset: 0,
+              backgroundImage: `
+                repeating-linear-gradient(90deg, transparent, transparent 31px, rgba(255,255,255,.015) 31px, rgba(255,255,255,.015) 32px),
+                repeating-linear-gradient(0deg, transparent, transparent 31px, rgba(255,255,255,.015) 31px, rgba(255,255,255,.015) 32px)
+              `,
+              borderRadius: 4,
+            }} />
+
+            {/* Zones */}
+            {ZONES.map(zone => (
+              <div key={zone.id} style={{
+                position: "absolute", left: zone.x, top: zone.y, width: zone.w, height: zone.h,
+                background: zone.floor, borderRadius: 3,
+                border: "1px solid #1a1d2488",
+                boxShadow: "inset 0 0 40px rgba(0,0,0,.3)",
+              }}>
+                <div style={{
+                  position: "absolute", top: 5, left: 8,
+                  fontFamily: "'Silkscreen', cursive", fontSize: 8, color: "#2a2e38",
+                  letterSpacing: 1, textTransform: "uppercase", userSelect: "none",
+                }}>{zone.name}</div>
+              </div>
+            ))}
+
+            {/* Hallway */}
+            <div style={{
+              position: "absolute", left: 80, top: 240, width: 780, height: 50,
+              background: "linear-gradient(180deg, #111318 0%, #0f1118 100%)",
+              borderTop: "1px dashed #1a1d2444",
+              borderBottom: "1px dashed #1a1d2444",
+            }} />
+
+            {/* Furniture */}
+            {FURNITURE.map((f, i) => {
+              const base = { position: "absolute", left: f.x, top: f.y };
+              switch (f.type) {
+                case "desk":
+                  return <div key={i} style={{ ...base, width: f.w, height: f.h, background: "#252830", borderRadius: 2, border: "1px solid #2a2e35", boxShadow: "0 2px 4px rgba(0,0,0,.3)" }}>
+                    {f.label && <span style={{ position: "absolute", top: -8, left: 2, fontSize: 6, color: "#1a1d24" }}>{f.label}</span>}
+                  </div>;
+                case "monitor":
+                  return <div key={i} style={{ ...base, width: f.w, height: f.h, background: "#1a2030", borderRadius: 1, border: "1px solid #2a3040", boxShadow: "0 0 6px rgba(80,140,255,.08)" }} />;
+                case "table":
+                  return <div key={i} style={{ ...base, width: f.w, height: f.h, background: "#2a2520", borderRadius: 4, border: "1px solid #3a3530", boxShadow: "0 3px 8px rgba(0,0,0,.4)" }} />;
+                case "chair":
+                  return <div key={i} style={{ ...base, width: f.w, height: f.h, background: "#303540", borderRadius: 7, border: "1px solid #3a4050" }} />;
+                case "whiteboard":
+                  return <div key={i} style={{ ...base, width: f.w, height: f.h, background: "#e8e4dc", borderRadius: 1, border: "1px solid #aaa8a0", boxShadow: "0 0 8px rgba(255,255,255,.03)" }} />;
+                case "couch":
+                  return <div key={i} style={{ ...base, width: f.w, height: f.h, background: "#3a2830", borderRadius: 6, border: "1px solid #4a3840" }} />;
+                case "coffee":
+                  return <div key={i} style={{ ...base, width: f.w, height: f.h, background: "#302820", borderRadius: 3, border: "1px solid #4a4030", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12 }}>☕</div>;
+                case "fridge":
+                  return <div key={i} style={{ ...base, width: f.w, height: f.h, background: "#dde0e4", borderRadius: 2, border: "1px solid #bbb" }} />;
+                case "rack":
+                  return <div key={i} style={{ ...base, width: f.w, height: f.h, background: "#1a1e28", borderRadius: 2, border: "1px solid #2a3040", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, padding: 4 }}>
+                    {[0,1,2,3].map(j => <div key={j} style={{ width: 4, height: 4, borderRadius: 2, animation: `rackBlink ${1.5 + j * 0.3}s infinite`, animationDelay: `${j * 0.4}s` }} />)}
+                  </div>;
+                case "terminal":
+                  return <div key={i} style={{ ...base, width: f.w, height: f.h, background: "#0a1018", borderRadius: 2, border: "1px solid #1a2838", boxShadow: "0 0 10px rgba(80,200,120,.06)" }}>
+                    <div style={{ width: "60%", height: 2, background: "#51cf66", margin: "6px 4px", borderRadius: 1, opacity: 0.6 }} />
+                    <div style={{ width: "40%", height: 2, background: "#51cf66", margin: "3px 4px", borderRadius: 1, opacity: 0.4 }} />
+                  </div>;
+                case "board":
+                  return <div key={i} style={{ ...base, width: f.w, height: f.h, background: "#1c1a20", borderRadius: 3, border: "1px solid #2c2a35" }}>
+                    {[0,1,2].map(j => <div key={j} style={{ width: 10 + j * 8, height: 4, background: ["#ff6b9d22", "#ffd43b22", "#74c0fc22"][j], borderRadius: 2, margin: "4px 6px" }} />)}
+                  </div>;
+                case "plant":
+                  return <div key={i} style={{ ...base, width: f.w, height: f.h, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11 }}>🌿</div>;
+                default: return null;
+              }
+            })}
+
+            {/* AGENTS */}
+            {agents.filter(a => a.status !== "offline").map(agent => {
+              const isWalking = agent.status === "traveling";
+              const isWorking = agent.status === "working";
+              const bobDelay = agent.id.charCodeAt(0) * 0.1;
+
+              return (
+                <div key={agent.id} style={{
+                  position: "absolute",
+                  left: agent.x - 10,
+                  top: agent.y - 30,
+                  width: 20,
+                  zIndex: Math.round(agent.y) + 100,
+                  transition: isWalking ? "none" : "left .08s linear, top .08s linear",
+                  cursor: "pointer",
+                  "--face": agent.facing, "--c": agent.color,
+                }} onClick={() => setSelectedAgent(selectedAgent === agent.id ? null : agent.id)}>
+
+                  {/* Shadow */}
+                  <div style={{
+                    position: "absolute", bottom: -2, left: 3, width: 14, height: 5,
+                    background: "rgba(0,0,0,.35)", borderRadius: "50%",
+                    filter: "blur(2px)",
+                  }} />
+
+                  {/* Character body group */}
+                  <div style={{
+                    animation: isWalking
+                      ? `bob .3s infinite`
+                      : isWorking
+                        ? `work 1.5s infinite`
+                        : `float 3s ease-in-out infinite`,
+                    animationDelay: `${bobDelay}s`,
+                    transformOrigin: "bottom center",
+                    "--face": agent.facing,
+                    transform: `scaleX(${agent.facing})`,
+                  }}>
+                    {/* Hair */}
+                    <div style={{
+                      width: 12, height: 5, background: agent.hairColor,
+                      borderRadius: "4px 4px 0 0", margin: "0 auto",
+                      position: "relative",
+                    }} />
+                    {/* Head */}
+                    <div style={{
+                      width: 12, height: 10, background: agent.skinColor,
+                      borderRadius: "3px 3px 2px 2px", margin: "0 auto",
+                      position: "relative",
+                    }}>
+                      {/* Eyes */}
+                      <div style={{
+                        position: "absolute", top: 3, left: 2,
+                        width: 2, height: 2.5, background: "#1a1a2a",
+                        borderRadius: 1, animation: "blink 3.5s infinite",
+                        animationDelay: `${bobDelay + 1}s`,
+                      }} />
+                      <div style={{
+                        position: "absolute", top: 3, right: 2,
+                        width: 2, height: 2.5, background: "#1a1a2a",
+                        borderRadius: 1, animation: "blink 3.5s infinite",
+                        animationDelay: `${bobDelay + 1}s`,
+                      }} />
+                      {/* Mouth */}
+                      <div style={{
+                        position: "absolute", bottom: 2, left: "50%", transform: "translateX(-50%)",
+                        width: 3, height: 1.5, background: "#a06050",
+                        borderRadius: "0 0 2px 2px",
+                      }} />
+                    </div>
+                    {/* Torso */}
+                    <div style={{
+                      width: 14, height: 10, background: agent.shirtColor,
+                      borderRadius: "2px 2px 1px 1px", margin: "0 auto",
+                      boxShadow: `0 0 6px ${agent.color}22`,
+                    }} />
+                    {/* Legs */}
+                    <div style={{ display: "flex", justifyContent: "center", gap: 2 }}>
+                      <div style={{
+                        width: 5, height: isWalking ? 6 : 5,
+                        background: "#2a2a3a",
+                        borderRadius: "0 0 2px 2px",
+                        transform: isWalking && agent.walkFrame % 16 < 8 ? "translateY(-1px)" : "none",
+                        transition: "transform .1s",
+                      }} />
+                      <div style={{
+                        width: 5, height: isWalking ? 6 : 5,
+                        background: "#2a2a3a",
+                        borderRadius: "0 0 2px 2px",
+                        transform: isWalking && agent.walkFrame % 16 >= 8 ? "translateY(-1px)" : "none",
+                        transition: "transform .1s",
+                      }} />
+                    </div>
+                  </div>
+
+                  {/* Name label */}
+                  <div style={{
+                    textAlign: "center", fontSize: 7, marginTop: 2,
+                    fontFamily: "'Silkscreen', cursive",
+                    color: agent.color, letterSpacing: 0.5,
+                    textShadow: `0 0 8px ${agent.color}44`,
+                    transform: `scaleX(${agent.facing})`,
+                  }}>{agent.name}</div>
+
+                  {/* Working indicator */}
+                  {isWorking && (
+                    <div style={{
+                      position: "absolute", top: -8, right: -8,
+                      width: 10, height: 10, display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      <div style={{
+                        width: 6, height: 6, borderRadius: "50%",
+                        background: agent.color, opacity: 0.7,
+                        animation: "pulse 1.2s infinite",
+                        boxShadow: `0 0 6px ${agent.color}`,
+                      }} />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* SPEECH BUBBLES */}
+            {agents.filter(a => a.bubble && a.status !== "offline").map(agent => (
+              <div key={`bubble-${agent.id}`} style={{
+                position: "absolute",
+                left: agent.x - 60,
+                top: agent.y - 62,
+                width: 120,
+                zIndex: 9999,
+                pointerEvents: "none",
+                animation: "slideUp .25s ease",
+              }}>
+                <div style={{
+                  background: "#181c24",
+                  border: `1px solid ${agent.color}44`,
+                  borderRadius: 6,
+                  padding: "4px 8px",
+                  fontSize: 8,
+                  color: "#bbc0cc",
+                  textAlign: "center",
+                  lineHeight: 1.4,
+                  boxShadow: `0 4px 16px rgba(0,0,0,.5), 0 0 8px ${agent.color}11`,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  maxWidth: 140,
+                  margin: "0 auto",
+                  width: "fit-content",
+                }}>
+                  {agent.bubble}
+                </div>
+                <div style={{
+                  width: 6, height: 6, background: "#181c24",
+                  border: `1px solid ${agent.color}44`,
+                  borderTop: "none", borderLeft: "none",
+                  transform: "rotate(45deg)",
+                  margin: "-3px auto 0",
+                }} />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Command bar */}
         <div style={{
           height: 48, borderTop: "1px solid #1a1d24", display: "flex", alignItems: "center",
           padding: "0 16px", gap: 10, background: "#0d0e14", flexShrink: 0,
@@ -821,26 +922,9 @@ export default function App() {
             padding: "4px 14px", borderRadius: 4, cursor: "pointer", fontFamily: font, fontSize: 10,
           }}>Send</button>
         </div>
-
-        {/* Simplified office view for now - showing it works */}
-        <div style={{
-          flex: 1,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "radial-gradient(ellipse at 50% 50%, #0f1018 0%, #0a0b0f 100%)",
-          fontSize: 20,
-          color: "#51cf66",
-        }}>
-          🏢 PixelOffice is Loading...
-          <br />
-          <div style={{ fontSize: 14, marginTop: 10, color: "#888" }}>
-            Try: "Alice, debug the auth system"
-          </div>
-        </div>
       </div>
 
-      {/* ═══ RIGHT PANEL: ACTIVITY LOG ═══ */}
+      {/* RIGHT PANEL: ACTIVITY LOG */}
       <div style={{ width: 260, borderLeft: "1px solid #1a1d24", display: "flex", flexDirection: "column", background: "#0d0e14", flexShrink: 0 }}>
         <div style={{ padding: "14px 12px 10px", borderBottom: "1px solid #1a1d24" }}>
           <span style={{ fontFamily: "'Silkscreen', cursive", fontSize: 10, color: "#51cf66", letterSpacing: 1 }}>ACTIVITY</span>
@@ -849,7 +933,7 @@ export default function App() {
         <div style={{ flex: 1, overflowY: "auto", padding: "4px 0" }}>
           {chatLog.length === 0 && (
             <div style={{ padding: 16, color: "#223", fontSize: 10, textAlign: "center", lineHeight: 2 }}>
-              Agents are warming up...<br />Try talking to them!
+              Agents are warming up...<br />Watch them go!
             </div>
           )}
           {chatLog.map(entry => (
@@ -871,6 +955,28 @@ export default function App() {
             </div>
           ))}
           <div ref={chatEnd} />
+        </div>
+
+        {/* Quick actions */}
+        <div style={{ padding: "8px 12px", borderTop: "1px solid #1a1d24", display: "flex", flexDirection: "column", gap: 3 }}>
+          {[
+            { label: "📊 Status", cmd: "status" },
+            { label: "📢 Call All Back", cmd: "call back everyone" },
+            { label: "🗑 Clear Log", action: () => setChatLog([]) },
+          ].map((item, i) => (
+            <button key={i} onClick={() => {
+              if (item.action) { item.action(); return; }
+              setCommand(item.cmd);
+              setTimeout(() => handleCommand(), 20);
+            }} style={{
+              background: "#ffffff04", border: "1px solid #1a1d24", color: "#445",
+              padding: "4px 8px", borderRadius: 3, cursor: "pointer", fontFamily: font,
+              fontSize: 9, textAlign: "left",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = "#ffffff0a"; e.currentTarget.style.color = "#778"; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "#ffffff04"; e.currentTarget.style.color = "#445"; }}
+            >{item.label}</button>
+          ))}
         </div>
       </div>
     </div>
