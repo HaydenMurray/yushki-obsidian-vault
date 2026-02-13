@@ -1,18 +1,22 @@
 {
   "name": "pixeloffice-bridge",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "PixelOffice Bridge Server + Frontend",
+  "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "server": "node server.js",
+    "frontend": "cd frontend && npm start",
+    "dev": "concurrently \"npm run server\" \"npm run frontend\"",
+    "start": "node server.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "cors": "^2.8.6",
-    "express": "^5.2.1"
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "concurrently": "^7.6.0"
   }
 }

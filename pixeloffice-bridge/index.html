@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PixelOffice</title>
+    <style>
+        body { margin: 0; padding: 0; font-family: monospace; }
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background: #0a0b0f;
+            color: #51cf66;
+            font-size: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #0d0e14;
+            color: #c0c4cc;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            background: #1a1d24;
+        }
+        .agent {
+            display: inline-block;
+            margin: 5px;
+            padding: 8px 12px;
+            background: #ff6b9d22;
+            border: 1px solid #ff6b9d44;
+            border-radius: 5px;
+            color: #ff6b9d;
+        }
+        input, button {
+            padding: 8px 12px;
+            margin: 5px;
+            background: #1a1d24;
+            border: 1px solid #2a2e38;
+            color: #c0c4cc;
+            border-radius: 4px;
+        }
+        button {
+            background: #ff6b9d22;
+            border-color: #ff6b9d44;
+            color: #ff6b9d;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #ff6b9d33;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 style="color: #ff6b9d;">🏢 PixelOffice Bridge Test</h1>
+        
+        <div class="status" id="status">
+            <strong>Status:</strong> <span id="connection-status">Checking connection...</span>
+        </div>
+
+        <div class="status">
+            <strong>Available Agents:</strong><br>
+            <div id="agents-list">Loading...</div>
+        </div>
+
+        <div class="status">
+            <strong>Test Commands:</strong><br>
+            <input type="text" id="command-input" placeholder="e.g., 'Alice, debug the auth system'" style="width: 300px;">
+            <button onclick="sendCommand()">Send Command</button><br>
+            <button onclick="testDecision('alice')">Test Alice Decision</button>
+            <button onclick="testDecision('bob')">Test Bob Decision</button>
+            <button onclick="getStatus()">Get Status</button>
+        </div>
+
+        <div class="status">
+            <strong>Response Log:</strong><br>
+            <div id="log" style="max-height: 300px; overflow-y: auto; background: #0a0b0f; padding: 10px; border-radius: 4px; font-size: 12px;"></div>
+        </div>
+
+        <div class="status">
+            <p><strong>Next Step:</strong> This tests your bridge server. The full PixelOffice UI is setting up in the background.</p>
+            <p>Once ready, you'll have the full pixel art office with animated agents!</p>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        const log = document.getElementById('log');
+        
+        function addLog(message, type = 'info') {
+            const time = new Date().toLocaleTimeString();
+            const colors = { 
+                info: '#51cf66', 
+                error: '#ff6b6b', 
+                success: '#74c0fc',
+                agent: '#ffd43b'
+            };
+            log.innerHTML += `<div style="color: ${colors[type]}">[${time}] ${message}</div>`;
+            log.scrollTop = log.scrollHeight;
+        }
+
+        async function testConnection() {
+            try {
+                const response = await fetch(`${API_BASE}/api/health`);
+                const data = await response.json();
+                document.getElementById('connection-status').textContent = 
+                    `✅ Connected - ${data.agents} agents available`;
+                document.getElementById('connection-status').style.color = '#51cf66';
+                
+                // Show agents
+                const agents = ['Alice', 'Bob', 'Carol', 'David', 'Eve', 'Frank'];
+                document.getElementById('agents-list').innerHTML = 
+                    agents.map(name => `<span class="agent">${name}</span>`).join('');
+                
+                addLog('Bridge server connection successful!', 'success');
+                return true;
+            } catch (error) {
+                document.getElementById('connection-status').textContent = 
+                    `❌ Connection failed: ${error.message}`;
+                document.getElementById('connection-status').style.color = '#ff6b6b';
+                addLog(`Connection error: ${error.message}`, 'error');
+                return false;
+            }
+        }
+
+        async function testDecision(agentId) {
+            try {
+                const response = await fetch(`${API_BASE}/api/agents/${agentId}/decide`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        context: {
+                            currentZone: 'devpit',
+                            nearbyAgents: ['Bob', 'Carol'],
+                            status: 'idle'
+                        }
+                    })
+                });
+                const decision = await response.json();
+                addLog(`${agentId.toUpperCase()} decided: ${decision.action} ${JSON.stringify(decision.params || {})}`, 'agent');
+            } catch (error) {
+                addLog(`Decision test failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function sendCommand() {
+            const input = document.getElementById('command-input');
+            const command = input.value.trim();
+            if (!command) return;
+
+            // Try to parse which agent
+            const agents = ['alice', 'bob', 'carol', 'david', 'eve', 'frank'];
+            const targetAgent = agents.find(agent => 
+                command.toLowerCase().startsWith(agent)
+            );
+
+            if (targetAgent) {
+                const message = command.slice(targetAgent.length).replace(/^[,:\s]+/, '').trim();
+                try {
+                    const response = await fetch(`${API_BASE}/api/agents/${targetAgent}/message`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: message || command })
+                    });
+                    const data = await response.json();
+                    addLog(`YOU: ${command}`, 'info');
+                    addLog(`${targetAgent.toUpperCase()}: ${data.reply}`, 'agent');
+                } catch (error) {
+                    addLog(`Message failed: ${error.message}`, 'error');
+                }
+            } else {
+                addLog('Address an agent by name: "Alice, debug the system"', 'error');
+            }
+            
+            input.value = '';
+        }
+
+        function getStatus() {
+            addLog('Getting agent status...', 'info');
+            ['alice', 'bob', 'carol'].forEach(agent => {
+                setTimeout(() => testDecision(agent), Math.random() * 1000);
+            });
+        }
+
+        // Auto-connect on load
+        window.addEventListener('load', () => {
+            testConnection();
+        });
+
+        // Enter key support
+        document.getElementById('command-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendCommand();
+        });
+    </script>
+</body>
+</html>
